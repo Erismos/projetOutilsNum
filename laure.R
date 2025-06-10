@@ -14,12 +14,12 @@ print(dim(data))
 
 print(summary(data))
 print(names(data))
-# on peut vérifier le type des données 
+# on peut vérifier le type des données
 str(data)
 # print(str(data))
 # si on veut tester sur une variable numerique specifique, par exemple id
 # print(summary(data$id))
-# si on veut lire les données caractérielle 
+# si on veut lire les données caractérielle
 # print(table(data$IMO))
 
 # Nettoyage des données
@@ -39,7 +39,7 @@ print(dim(data)) # on en a 243530 lignes et 18 colonnes
 # on prend que les valeurs numériques
 data_numeric <- names(data)[sapply(data, is.numeric)]
 for(i in data_numeric){
-    # double crochet car un vecteur 
+    # double crochet car un vecteur
     q1 <- quantile(data[[i]], 0.25) # calcul du premier quantile
     q3 <- quantile(data[[i]], 0.75) # calcul du troisième quantile
     iqr <- q3 - q1
@@ -53,13 +53,13 @@ print(sum(is.na(data))) # 45418 valeurs aberrantes
 # on supprime les lignes avec les valeurs aberrantes
 data <- na.omit(data)
 print("nombre de lignes et colonnes :")
-print(dim(data)) # 201729 lignes 
+print(dim(data)) # 201729 lignes
 
 # doublons
 duplicated(data)  # Renvoie TRUE pour les lignes dupliquées
 # nombre de doublons
 print("nombre de doublons")
-print(sum(duplicated(data))) # 0 doublons 
+print(sum(duplicated(data))) # 0 doublons
 
 
 ##############################################
@@ -76,5 +76,3 @@ barplot(nb_type, col = "red",ylim = c(0, 80000),
 dev.off()  # ferme le fichier png
 
 # remplacer par la mediane au lieu de supprimer les lignes
-
-
