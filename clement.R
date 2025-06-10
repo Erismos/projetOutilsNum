@@ -1,313 +1,218 @@
 # clement file
 
+# Charger les bibliothèques nécessaires
+library(readr)
 
-data <- read.csv(file = "data/vessel-total-clean.csv", header = TRUE)
+# Lire le fichier CSV en remplaçant les "\\N" par NA
+data <- read_csv("data/vessel-total-clean.csv", na = "\\N")
 
-print("Initial data dimensions:")
-print(dim(data))
-data[data == "\\N"] <- NA # Replace "\\N" with NA
+print(dim(data))  # Afficher les dimensions du jeu de données
+# Calculer le pourcentage de NA par colonne
+na_percent <- sapply(data, function(col) mean(is.na(col)))
 
-# Check missing values
-print("Checking for missing values...")
-print(sum(is.na(data)))
-data <- na.omit(data)
+# Sélectionner les colonnes avec moins de 5% de NA
+cols_to_check <- names(na_percent[na_percent < 0.05])
 
+# Supprimer les lignes contenant des NA dans ces colonnes
+data_cleaned <- data %>% filter(across(all_of(cols_to_check), ~ !is.na(.)))
 
-# Check for duplicates
-print("Checking for duplicates...")
-print(sum(duplicated(data)))
-data <- unique(data)
-print("Duplicates removed. New dimensions:")
-print(dim(data))
-
-# Convert numeric columns to numeric type
-num_cols <- sapply(data, is.numeric)
-
-# Remove outliers using IQR method
-print("Removing outliers using IQR method...")
-for (col in names(data)[num_cols]) {
-  Q1 <- quantile(data[[col]], 0.25)
-  Q3 <- quantile(data[[col]], 0.75)
-  IQR <- Q3 - Q1
-  lower <- Q1 - (1.5 * IQR )
-  upper <- Q3 + (1.5 * IQR)
-  data[[col]][data[[col]] < lower | data[[col]] > upper] <- NA
+# Fonction pour détecter et remplacer les valeurs aberrantes
+replace_outliers_with_mean <- function(x) {
+  if (is.numeric(x)) {
+    # Détection des valeurs aberrantes par l'IQR
+    q1 <- quantile(x, 0.25, na.rm = TRUE)
+    q3 <- quantile(x, 0.75, na.rm = TRUE)
+    iqr <- q3 - q1
+    lower <- q1 - 1.5 * iqr
+    upper <- q3 + 1.5 * iqr
+    mean_val <- mean(x[x >= lower & x <= upper], na.rm = TRUE)
+    x[x < lower | x > upper] <- mean_val
+  }
+  return(x)
 }
-data <- na.omit(data)
-print("Outliers removed. New dimensions:")
-print(dim(data))
 
+# Fonction pour remplacer les NA par la moyenne de la colonne
+replace_na_with_mean <- function(x) {
+  if (is.numeric(x)) {
+    x[is.na(x)] <- mean(x, na.rm = TRUE)
+  }
+  return(x)
+}
 
-# Data summary
-print(summary(data))
+# Appliquer cette fonction aux colonnes numériques
+data_final <- data_cleaned %>% 
+    mutate(across(where(is.numeric), replace_outliers_with_mean)) %>%
+    mutate(across(where(is.numeric), replace_na_with_mean))
 
-# Save the cleaned data
-write.csv(data, "data/vessel-cleaned.csv", row.names = FALSE)
+# Afficher un aperçu
+print(head(data_final))
+print(summary(data_final))
+
+write.csv(data_final, "data/vessel-cleaned.csv", row.names = FALSE)
 # Save the cleaned data for further analysis
 print("Data cleaning complete. Cleaned data saved to 'data/vessel-cleaned.csv'.")
 
-library(ggplot2)
 
-data <- read.csv("data/vessel-cleaned.csv")
+####################################################
+# Graphiques optimisés pour l'analyse des données de bateaux #
+####################################################
 
-# Plotting the Distribution of Vessel Types
-ggplot(data, aes(x = as.factor(VesselType))) +
-  geom_bar(fill = "steelblue") +
-  labs(title = "Répartition des bateaux par type",
-       x = "Type de bateau",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/vessel_type_distribution.png", width = 8, height = 6)
-
-# Plotting the Length of Vessels
-ggplot(data, aes(x = Length)) +
-  geom_histogram(binwidth = 10, fill = "darkgreen", color = "black") +
-  labs(title = "Distribution des longueurs de bateaux",
-       x = "Longueur (mètres)",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/vessel_length_distribution.png", width = 8, height = 6)
-
-# Plotting the Width of Vessels
-ggplot(data, aes(x = Width)) +
-  geom_histogram(binwidth = 2, fill = "orange", color = "black") +
-  labs(title = "Distribution des largeurs de bateaux",
-       x = "Largeur (mètres)",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/vessel_width_distribution.png", width = 8, height = 6)
-
-# Plotting the Density of Vessel Positions
-ggplot(data, aes(x = LON, y = LAT)) +
-  stat_density2d(aes(fill = ..level..), geom = "polygon") +
-  scale_fill_viridis_c() +
-  labs(title = "Carte de densité des positions de bateaux",
-       x = "Longitude", y = "Latitude") +
-  theme_minimal()
-ggsave("figures/vessel_density_map.png", width = 8, height = 6)
-
-# Plotting the Speed Over Ground (SOG) by Vessel Type
-ggplot(data, aes(x = as.factor(VesselType), y = SOG)) +
-  geom_boxplot(fill = "lightblue") +
-  labs(title = "Vitesse (SOG) par type de bateau",
-       x = "Type de bateau",
-       y = "SOG (Speed Over Ground)") +
-  theme_minimal()
-ggsave("figures/vessel_sog_by_type.png", width = 8, height = 6)
-
-# Plotting the distribution of vessel statuses
-ggplot(data, aes(x = Status)) +
-  geom_bar(fill = "darkred") +
-  labs(title = "Répartition des statuts des bateaux",
-       x = "Statut",
-       y = "Nombre de bateaux") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-ggsave("figures/vessel_status_distribution.png", width = 8, height = 6)
-
-
-
+# Chargement des librairies
 library(ggplot2)
 library(dplyr)
 library(lubridate)
-library(viridisLite)
-# Boat distribution by hour of the day
+library(viridis)
+library(RColorBrewer)
+library(maps)
+library(mapdata)
+library(ggmap)
+
+# Chargement des données
+data <- read.csv("data/vessel-cleaned.csv")
+
+# Préparation des données
 data$BaseDateTime <- as.POSIXct(data$BaseDateTime, format="%Y-%m-%d %H:%M:%S")
 data$Hour <- hour(data$BaseDateTime)
 data$Date <- as.Date(data$BaseDateTime)
-
-ggplot(data, aes(x = Hour)) +
-  geom_histogram(binwidth = 1, fill = "navy", color = "white") +
-  labs(title = "Activité des bateaux par heure de la journée",
-       x = "Heure (0-23)",
-       y = "Nombre d'observations") +
-  theme_minimal() +
-  scale_x_continuous(breaks = seq(0, 23, 2))
-ggsave("figures/vessel_activity_by_hour.png", width = 10, height = 6)
-
-# Correlation between COG and SOG
-# ggplot(data, aes(x = COG, y = SOG)) +
-#   geom_point(alpha = 0.3, color = "darkblue") +
-#   geom_smooth(method = "loess", color = "red") +
-#   labs(title = "Relation entre la direction (COG) et la vitesse (SOG)",
-#        x = "Course Over Ground (degrés)",
-#        y = "Speed Over Ground (nœuds)") +
-#   theme_minimal()
-# ggsave("figures/sog_vs_cog_correlation.png", width = 10, height = 6)
-
-# position heatmap
-ggplot(data, aes(x = LON, y = LAT)) +
-  geom_hex(bins = 50) +
-  scale_fill_viridis_c(name = "Nombre\nd'observations") +
-  labs(title = "Heatmap des positions de bateaux",
-       x = "Longitude", y = "Latitude") +
-  theme_minimal() +
-  coord_fixed()
-ggsave("figures/vessel_position_heatmap.png", width = 10, height = 8)
-
-# Speed distribution by status
-ggplot(data, aes(x = Status, y = SOG, fill = Status)) +
-  geom_violin(alpha = 0.7) +
-  geom_boxplot(width = 0.1, fill = "white", alpha = 0.8) +
-  labs(title = "Distribution de la vitesse par statut du bateau",
-       x = "Statut du bateau",
-       y = "Speed Over Ground (nœuds)") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "none") +
-  scale_fill_viridis_d()
-ggsave("figures/sog_distribution_by_status.png", width = 12, height = 7)
-
-# Boat length vs width by type
 data$Length_num <- as.numeric(as.character(data$Length))
 data$Width_num <- as.numeric(as.character(data$Width))
 
-ggplot(data[!is.na(data$Length_num) & !is.na(data$Width_num),], 
-       aes(x = Length_num, y = Width_num, color = as.factor(VesselType))) +
-  geom_point(alpha = 0.6) +
-  labs(title = "Relation entre longueur et largeur des bateaux par type",
-       x = "Longueur (mètres)",
-       y = "Largeur (mètres)",
-       color = "Type de bateau") +
-  theme_minimal() +
-  scale_color_viridis_d()
-ggsave("figures/length_vs_width_by_type.png", width = 12, height = 8)
+# Thème personnalisé
+theme_marine <- theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray60"),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 11, face = "bold"),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
 
-# Boat observations over time
-# daily_counts <- data %>%
-#   group_by(Date) %>%
-#   summarise(count = n(), .groups = 'drop')
+  
+# Fonction pour créer un diagramme polaire amélioré
+create_polar_plot <- function(var, title, color) {
+  ggplot(data, aes(x = {{var}})) +
+    geom_histogram(binwidth = 15, fill = color, color = "white", alpha = 0.8) +
+    coord_polar(start = -pi/16) +
+    scale_x_continuous(limits = c(0, 360), breaks = seq(0, 360, by = 45)) +
+    labs(title = title, x = "", y = "") +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_blank(),
+      panel.grid.major.y = element_blank(),
+      plot.title = element_text(hjust = 0.5, face = "bold")
+    )
+}
 
-# ggplot(daily_counts, aes(x = Date, y = count)) +
-#   geom_line(color = "steelblue", size = 1) +
-#   geom_smooth(method = "loess", color = "red", se = TRUE) +
-#   labs(title = "Évolution du nombre d'observations de bateaux dans le temps",
-#        x = "Date",
-#        y = "Nombre d'observations par jour") +
-#   theme_minimal() +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-# ggsave("figures/vessel_observations_over_time.png", width = 12, height = 6)
+# COG et Heading côte à côte
+p1 <- create_polar_plot(COG, "Distribution des directions (COG)", "#4e79a7")
+p2 <- create_polar_plot(Heading, "Distribution des caps (Heading)", "#e15759")
+combined_polar <- plot_grid(p1, p2, ncol = 2)
 
-# Directional distributions (COG and Heading)
-library(ggplot2)
+ggsave("figures/combined_direction_plots.png", combined_polar, width = 12, height = 6)
 
-# COG (Course Over Ground)
-p1 <- ggplot(data, aes(x = COG)) +
-  geom_histogram(binwidth = 10, fill = "lightblue", color = "black") +
-  coord_polar(start = 0) +
-  labs(title = "Distribution circulaire - Course Over Ground (COG)",
-       x = "COG (degrés)", y = "Fréquence") +
-  theme_minimal() +
-  scale_x_continuous(breaks = seq(0, 360, 45))
 
-# Heading
-p2 <- ggplot(data, aes(x = Heading)) +
-  geom_histogram(binwidth = 10, fill = "lightcoral", color = "black") +
-  coord_polar(start = 0) +
-  labs(title = "Distribution circulaire - Heading",
-       x = "Heading (degrés)", y = "Fréquence") +
-  theme_minimal() +
-  scale_x_continuous(breaks = seq(0, 360, 45))
 
-ggsave("figures/cog_circular_distribution.png", plot = p1, width = 8, height = 8)
-ggsave("figures/heading_circular_distribution.png", plot = p2, width = 8, height = 8)
+# Détermination des limites de la carte basées sur les données
+bbox <- c(
+  left = min(data$LON, na.rm = TRUE) - 1,
+  bottom = min(data$LAT, na.rm = TRUE) - 1,
+  right = max(data$LON, na.rm = TRUE) + 1,
+  top = max(data$LAT, na.rm = TRUE) + 1
+)
 
-# Vessel concentration zones
-ggplot(data, aes(x = LON, y = LAT)) +
-  geom_point(alpha = 0.1, size = 0.5) +
-  stat_density2d_filled(alpha = 0.6, contour_var = "ndensity") +
-  labs(title = "Zones de forte concentration de bateaux",
+# Création de la carte de base
+base_map <- ggplot() +
+  geom_sf(data = world, fill = "gray80", color = "gray60") +
+  coord_sf(xlim = c(bbox["left"], bbox["right"]), 
+           ylim = c(bbox["bottom"], bbox["top"])) +
+  theme_minimal()
+
+# Heatmap superposée
+heatmap_plot <- base_map +
+  stat_density2d(
+    data = data,
+    aes(x = LON, y = LAT, fill = ..level.., alpha = ..level..),
+    geom = "polygon",
+    bins = 50
+  ) +
+  scale_fill_viridis_c(option = "plasma", name = "Densité") +
+  scale_alpha_continuous(range = c(0.1, 0.7), guide = "none") +
+  labs(title = "Densité du trafic maritime avec fond cartographique",
+       subtitle = "Visualisation des zones à forte concentration de navires",
        x = "Longitude", y = "Latitude") +
-  theme_minimal() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10)
+  )
+
+ggsave("figures/improved_density_map.png", heatmap_plot, width = 12, height = 9)
+
+
+# 1. RÉPARTITION DES BATEAUX PAR TYPE (amélioré)
+vessel_type_counts <- data %>%
+  count(VesselType, sort = TRUE) %>%
+  mutate(percentage = round(n/sum(n)*100, 1))
+
+ggplot(vessel_type_counts, aes(x = reorder(as.factor(VesselType), n), y = n)) +
+  geom_col(fill = "steelblue", color = "navy", alpha = 0.8) +
+  geom_text(aes(label = paste0(n, " (", percentage, "%)")), 
+            hjust = -0.1, size = 3.5) +
+  coord_flip() +
+  labs(title = "Répartition des bateaux par type",
+       subtitle = "Nombre total et pourcentage par catégorie",
+       x = "Type de bateau",
+       y = "Nombre de bateaux") +
+  theme_marine +
+  theme(axis.text.x = element_text(angle = 0))
+ggsave("figures/vessel_type_distribution_enhanced.png", width = 12, height = 8, dpi = 300)
+
+
+# 4. RELATION LONGUEUR/LARGEUR PAR TYPE (amélioré)
+length_width_clean <- data %>%
+  filter(!is.na(Length_num) & !is.na(Width_num) & 
+         Length_num > 0 & Width_num > 0 & 
+         Length_num < 500 & Width_num < 100) %>%  # Filtrer les valeurs aberrantes
+  group_by(VesselType) %>%
+  filter(n() >= 50) %>%  # Garder seulement les types avec assez de données
+  ungroup()
+
+ggplot(length_width_clean, aes(x = Length_num, y = Width_num, color = as.factor(VesselType))) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.8) +
+  scale_color_viridis_d(name = "Type de\nbateau") +
+  labs(title = "Relation entre longueur et largeur des bateaux",
+       subtitle = "Corrélation par type de navire avec tendances",
+       x = "Longueur (mètres)",
+       y = "Largeur (mètres)") +
+  theme_marine +
   theme(legend.position = "right") +
-  coord_fixed()
-ggsave("figures/vessel_concentration_zones.png", width = 12, height = 9)
+  facet_wrap(~VesselType, scales = "free", ncol = 3)
+ggsave("figures/length_vs_width_by_type_enhanced.png", width = 15, height = 12, dpi = 300)
 
-# Average speed by vessel type and status
-speed_summary <- data %>%
-  group_by(VesselType, Status) %>%
+# 8. RÉSUMÉ STATISTIQUE VISUEL
+summary_stats <- data %>%
   summarise(
-    mean_sog = mean(SOG, na.rm = TRUE),
-    median_sog = median(SOG, na.rm = TRUE),
-    count = n(),
-    .groups = 'drop'
-  ) %>%
-  filter(count >= 100)  # Filtrer pour avoir des groupes significatifs
+    total_vessels = n(),
+    unique_types = n_distinct(VesselType),
+    avg_speed = round(mean(SOG, na.rm = TRUE), 1),
+    max_speed = round(max(SOG, na.rm = TRUE), 1),
+    avg_length = round(mean(Length_num, na.rm = TRUE), 1),
+    date_range = paste(min(Date, na.rm = TRUE), "à", max(Date, na.rm = TRUE))
+  )
 
-ggplot(speed_summary, aes(x = as.factor(VesselType), y = mean_sog, fill = Status)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "Vitesse moyenne par type de bateau et statut",
-       x = "Type de bateau",
-       y = "Vitesse moyenne (nœuds)",
-       fill = "Statut") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-ggsave("figures/mean_speed_by_type_status.png", width = 12, height = 7)
+# Affichage des statistiques
+cat("=== RÉSUMÉ DE L'ANALYSE ===\n")
+cat("Nombre total d'observations:", summary_stats$total_vessels, "\n")
+cat("Types de navires uniques:", summary_stats$unique_types, "\n")
+cat("Vitesse moyenne:", summary_stats$avg_speed, "nœuds\n")
+cat("Vitesse maximale:", summary_stats$max_speed, "nœuds\n")
+cat("Longueur moyenne:", summary_stats$avg_length, "mètres\n")
+cat("Période d'observation:", summary_stats$date_range, "\n")
+cat("========================\n")
+
+print("Tous les graphiques ont été générés avec succès dans le dossier 'figures/'")
+print("Résolution: 300 DPI pour impression haute qualité")
 
 
-# Graphiques simples pour l'analyse des données de bateaux
-library(ggplot2)
-
-data <- read.csv("data/vessel-cleaned.csv")
-
-# 1. Vitesse moyenne par type de bateau (barres simples)
-speed_by_type <- aggregate(SOG ~ VesselType, data = data, mean)
-
-ggplot(speed_by_type, aes(x = as.factor(VesselType), y = SOG)) +
-  geom_bar(stat = "identity", fill = "lightblue", color = "black") +
-  labs(title = "Vitesse moyenne par type de bateau",
-       x = "Type de bateau",
-       y = "Vitesse moyenne (nœuds)") +
-  theme_minimal()
-ggsave("figures/mean_speed_by_type.png", width = 8, height = 6)
-
-# 2. Nombre de bateaux par zone géographique (découpage simple)
-data$Zone <- ifelse(data$LAT > 30, "Nord", 
-                   ifelse(data$LAT < 27, "Sud", "Centre"))
-
-ggplot(data, aes(x = Zone)) +
-  geom_bar(fill = "darkgreen", color = "black") +
-  labs(title = "Nombre de bateaux par zone géographique",
-       x = "Zone",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/boats_by_zone.png", width = 6, height = 5)
-
-# 3. Bateaux en mouvement vs à l'arrêt
-data$Moving <- ifelse(data$SOG > 1, "En mouvement", "À l'arrêt")
-
-ggplot(data, aes(x = Moving)) +
-  geom_bar(fill = "orange", color = "black") +
-  labs(title = "Bateaux en mouvement vs à l'arrêt",
-       x = "État",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/moving_vs_stationary.png", width = 6, height = 5)
-
-# 4. Top 5 des types de bateaux les plus fréquents
-vessel_counts <- table(data$VesselType)
-top5_vessels <- names(sort(vessel_counts, decreasing = TRUE)[1:5])
-data_top5 <- data[data$VesselType %in% top5_vessels, ]
-
-ggplot(data_top5, aes(x = as.factor(VesselType))) +
-  geom_bar(fill = "purple", color = "black") +
-  labs(title = "Top 5 des types de bateaux",
-       x = "Type de bateau",
-       y = "Nombre") +
-  theme_minimal()
-ggsave("figures/top5_vessel_types.png", width = 8, height = 6)
-
-# 5. Distribution simple des vitesses (avec ligne verticale pour la moyenne)
-mean_sog <- mean(data$SOG)
-
-ggplot(data, aes(x = SOG)) +
-  geom_histogram(bins = 30, fill = "lightcoral", color = "black") +
-  geom_vline(xintercept = mean_sog, color = "red", linetype = "dashed", size = 1) +
-  labs(title = "Distribution des vitesses",
-       subtitle = paste("Ligne rouge = vitesse moyenne (", round(mean_sog, 1), " nœuds)"),
-       x = "Vitesse (nœuds)",
-       y = "Nombre de bateaux") +
-  theme_minimal()
-ggsave("figures/speed_distribution_simple.png", width = 8, height = 6)
-
-print("5 graphiques simples créés et sauvegardés dans le dossier 'figures/'")
