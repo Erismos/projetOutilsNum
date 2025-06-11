@@ -1,4 +1,4 @@
-# Projet AIS - Analyse de Trafic Maritime
+# Projet Outils Numériques - Analyse de Trafic Maritime
 
 
 **Contexte** : Projet de 3e année - ISEN Ouest (Big Data / Intelligence Artificielle / Développement Web)
