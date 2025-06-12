@@ -334,17 +334,18 @@ plot_main_routes <- function(clustering_result, top_n = 5) {
 
 # Carte interactive Leaflet
 create_interactive_map <- function(data, max_vessels = 142) {
+  print("filtrage des données pour la carte interactive...")
   vessels_to_plot <- unique(data$VesselName)[1:min(max_vessels, length(unique(data$VesselName)))]
   data_filtered <- data %>%
     filter(VesselName %in% vessels_to_plot) %>%
     mutate(VesselType = ifelse(is.na(VesselType), "Inconnu", as.character(VesselType)))
   
   vessel_types <- unique(data_filtered$VesselType)
-  routes_analysis <- identify_main_routes(data_filtered, eps = 0.05, min_samples = 10)
-  main_routes <- routes_analysis$main_routes %>% head(5)
+  # routes_analysis <- identify_main_routes(data_filtered, eps = 0.05, min_samples = 10)
+  # main_routes <- routes_analysis$main_routes %>% head(6)
   
   type_palette <- colorFactor(palette = "Set1", domain = vessel_types)
-  route_palette <- colorFactor(palette = "Dark2", domain = main_routes$cluster)
+  # route_palette <- colorFactor(palette = "Dark2", domain = main_routes$cluster)
   
   map <- leaflet() %>%
     addTiles() %>%
@@ -355,7 +356,8 @@ create_interactive_map <- function(data, max_vessels = 142) {
       position = "topright"
     ) %>%
     hideGroup("Routes principales")
-  
+
+  print("Ajout des trajectoires pour les bateaux...")
   for (vessel_type in vessel_types) {
     type_data <- data_filtered %>% filter(VesselType == vessel_type)
     for (vessel_name in unique(type_data$VesselName)) {
@@ -365,41 +367,51 @@ create_interactive_map <- function(data, max_vessels = 142) {
           addPolylines(
             lng = traj$LON, lat = traj$LAT, color = type_palette(vessel_type),
             weight = 2, opacity = 0.7, group = vessel_type,
-            popup = paste("Bateau:", vessel_name, "<br>Type:", vessel_type)
+            popup = paste("<h2>Bateau:", vessel_name, "</h2><br>Type:", vessel_type,
+                          "<br>Longueur (m):", round(mean(traj$Length, na.rm = TRUE), 2),
+                          "<br>Largeur (m):", round(mean(traj$Width, na.rm = TRUE), 2),
+                          "<hr>Distance totale (km):", round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2), na.rm = TRUE) * 111, 2),
+                          "<br>Vitesse moyenne (nœuds):", round(mean(traj$SOG, na.rm = TRUE), 2),
+                          "<br>Vitesse maximale (nœuds):", round(max(traj$SOG, na.rm = TRUE), 2),
+                          "<br>Date de début:", min(traj$BaseDateTime), "<br>Date de fin:", max(traj$BaseDateTime)
+                          )
           )
+        map <- map %>%
+          addPolylines(lng = traj$LON, lat = traj$LAT, color = "red", weight = 10, opacity = 0.3, groupe = "Routes principales")
       }
     }
   }
   
-  clustered_data <- routes_analysis$clustered_data %>% filter(cluster %in% main_routes$cluster)
-  for (route_id in main_routes$cluster) {
-    points <- clustered_data %>% filter(cluster == route_id)
-    center <- main_routes %>% filter(cluster == route_id)
-    map <- map %>%
-      addCircleMarkers(data = points, lng = ~LON, lat = ~LAT, radius = 3,
-                       color = route_palette(route_id), stroke = FALSE,
-                       fillOpacity = 0.7, group = "Routes principales") %>%
-      addLabelOnlyMarkers(lng = center$center_lon, lat = center$center_lat,
-                          label = paste("Route", route_id), group = "Routes principales",
-                          labelOptions = labelOptions(noHide = TRUE, textOnly = TRUE,
-                            style = list("color" = "black", "font-weight" = "bold",
-                                         "background" = "rgba(255,255,255,0.7)")))
-  }
+  # print("Ajout des routes principales...")
+  # clustered_data <- routes_analysis$clustered_data %>% filter(cluster %in% main_routes$cluster)
+  # for (route_id in main_routes$cluster) {
+  #   points <- clustered_data %>% filter(cluster == route_id)
+  #   center <- main_routes %>% filter(cluster == route_id)
+  #   map <- map %>%
+  #     addCircleMarkers(data = points, lng = ~LON, lat = ~LAT, radius = 3,
+  #                      color = route_palette(route_id), stroke = FALSE,
+  #                      fillOpacity = 0.7, group = "Routes principales") %>%
+  #     addLabelOnlyMarkers(lng = center$center_lon, lat = center$center_lat,
+  #                         label = paste("Route", route_id), group = "Routes principales",
+  #                         labelOptions = labelOptions(noHide = TRUE, textOnly = TRUE,
+  #                           style = list("color" = "black", "font-weight" = "bold",
+  #                                        "background" = "rgba(255,255,255,0.7)")))
+  # }
   
   map <- map %>%
     addLegend(position = "bottomright", pal = type_palette, values = vessel_types,
-              title = "Types de bateaux", opacity = 0.7) %>%
-    addLegend(position = "bottomleft", pal = route_palette, values = main_routes$cluster,
+              title = "Types de bateaux", opacity = 0.7) #%>%
+    addLegend(position = "bottomleft", pal = "red",
               title = "Routes principales", opacity = 0.7, group = "Routes principales")
   
   return(map)
-}
+} 
 
 # ===============================
 # 3. EXÉCUTION ET EXPORTS
 # ===============================
 print("Analyse en cours...")
-print("Génération des graphiques et cartes...")
+print("Génération des graphiques...")
 # Visualisation statique globale
 ggsave("plots/all_trajectories.png", plot_all_trajectories(vessel_data, max_vessels = 100), width = 12, height = 8)
 
@@ -407,9 +419,9 @@ ggsave("plots/all_trajectories.png", plot_all_trajectories(vessel_data, max_vess
 ggsave("plots/single_trajectory.png", plot_single_trajectory(vessel_data, vessel_name = "OVERSEAS LOS ANGELES"), width = 12, height = 8)
 
 # Analyse des routes principales
-print("Identification des routes principales...")
-routes_result <- identify_main_routes(vessel_data, eps = 0.05, min_samples = 10)
-ggsave("plots/main_routes.png", plot_main_routes(routes_result), width = 12, height = 8)
+# print("Identification des routes principales...")
+# routes_result <- identify_main_routes(vessel_data, eps = 0.05, min_samples = 10)
+# ggsave("plots/main_routes.png", plot_main_routes(routes_result), width = 12, height = 8)
 
 print("Génération de la carte interactive...")
 # Génération de la carte interactive
