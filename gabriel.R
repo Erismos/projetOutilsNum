@@ -142,7 +142,7 @@ dev.off()
 # Régression linéaire entre Length et Width
 
 set.seed(42)
-index <- sample(1:nrow(vessel_final2), size = 0.7 * nrow(vessel_final2))
+index <- sample(1:nrow(vessel_final2), size = 0.8 * nrow(vessel_final2))
 train <- vessel_final2[index, ]
 test <- vessel_final2[-index, ]
 
