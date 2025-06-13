@@ -69,8 +69,21 @@ replace_outliers_with_mean <- function(x) {
     iqr <- q3 - q1
     lower <- q1 - 1.5 * iqr
     upper <- q3 + 1.5 * iqr
-    mean_val <- mean(x[x >= lower & x <= upper], na.rm = TRUE)
-    x[x < lower | x > upper] <- mean_val
+
+    # Identifier les valeurs aberrantes
+    outliers <- x < lower | x > upper
+
+    # Remplacer les valeurs aberrantes par la moyenne des valeurs non aberrantes
+    x[outliers] <- NA  # Mettre les outliers à NA pour le calcul de la moyenne
+    # Calculer la moyenne des valeurs non aberrantes
+    if (sum(!is.na(x[x >= lower & x <= upper])) > 0) {
+      mean_val <- mean(x[x >= lower & x <= upper], na.rm = TRUE)
+    } else {
+      # Si toutes les valeurs sont des outliers, utiliser la moyenne globale
+      mean_val <- mean(x, na.rm = TRUE)
+    }
+
+    x[outliers] <- mean_val  # Remplacer les outliers par la moyenne
   }
   return(x)
 }
@@ -139,7 +152,7 @@ create_polar_plot <- function(var, title, color) {
     coord_polar(start = -pi/16) +
     scale_x_continuous(limits = c(0, 360), breaks = seq(0, 360, by = 45)) +
     labs(title = title, x = "", y = "") +
-    theme_minimal() +
+    theme_light() +
     theme(
       axis.text.y = element_blank(),
       panel.grid.major.y = element_blank(),
@@ -351,11 +364,11 @@ create_interactive_map <- function(data, max_vessels = 142) {
     addTiles() %>%
     setView(lng = mean(data_filtered$LON, na.rm = TRUE), lat = mean(data_filtered$LAT, na.rm = TRUE), zoom = 6) %>%
     addLayersControl(
-      overlayGroups = c(vessel_types, "Routes principales"),
+      overlayGroups = c("Tous les bateaux", vessel_types, "Routes principales"),
       options = layersControlOptions(collapsed = FALSE),
       position = "topright"
     ) %>%
-    hideGroup("Routes principales")
+    hideGroup(c(vessel_types, "Routes principales"))
 
   print("Ajout des trajectoires pour les bateaux...")
   for (vessel_type in vessel_types) {
@@ -366,10 +379,11 @@ create_interactive_map <- function(data, max_vessels = 142) {
         map <- map %>%
           addPolylines(
             lng = traj$LON, lat = traj$LAT, color = type_palette(vessel_type),
-            weight = 2, opacity = 0.7, group = vessel_type,
+            weight = 2, opacity = 0.7, group = c("Tous les bateaux", vessel_types),
             popup = paste("<h2>Bateau:", vessel_name, "</h2><br>Type:", vessel_type,
                           "<br>Longueur (m):", round(mean(traj$Length, na.rm = TRUE), 2),
                           "<br>Largeur (m):", round(mean(traj$Width, na.rm = TRUE), 2),
+                          "<br> Tirant d'eau (m):", round(mean(traj$Draft, na.rm = TRUE), 2),
                           "<hr>Distance totale (km):", round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2), na.rm = TRUE) * 111, 2),
                           "<br>Vitesse moyenne (nœuds):", round(mean(traj$SOG, na.rm = TRUE), 2),
                           "<br>Vitesse maximale (nœuds):", round(max(traj$SOG, na.rm = TRUE), 2),
@@ -377,33 +391,16 @@ create_interactive_map <- function(data, max_vessels = 142) {
                           )
           )
         map <- map %>%
-          addPolylines(lng = traj$LON, lat = traj$LAT, color = "red", weight = 10, opacity = 0.3, groupe = "Routes principales")
+          addPolylines(lng = traj$LON, lat = traj$LAT, color = "red", weight = 10, opacity = 0.1, group = "Routes principales")
       }
     }
   }
-  
-  # print("Ajout des routes principales...")
-  # clustered_data <- routes_analysis$clustered_data %>% filter(cluster %in% main_routes$cluster)
-  # for (route_id in main_routes$cluster) {
-  #   points <- clustered_data %>% filter(cluster == route_id)
-  #   center <- main_routes %>% filter(cluster == route_id)
-  #   map <- map %>%
-  #     addCircleMarkers(data = points, lng = ~LON, lat = ~LAT, radius = 3,
-  #                      color = route_palette(route_id), stroke = FALSE,
-  #                      fillOpacity = 0.7, group = "Routes principales") %>%
-  #     addLabelOnlyMarkers(lng = center$center_lon, lat = center$center_lat,
-  #                         label = paste("Route", route_id), group = "Routes principales",
-  #                         labelOptions = labelOptions(noHide = TRUE, textOnly = TRUE,
-  #                           style = list("color" = "black", "font-weight" = "bold",
-  #                                        "background" = "rgba(255,255,255,0.7)")))
-  # }
-  
+
   map <- map %>%
     addLegend(position = "bottomright", pal = type_palette, values = vessel_types,
-              title = "Types de bateaux", opacity = 0.7) #%>%
-    addLegend(position = "bottomleft", pal = "red",
-              title = "Routes principales", opacity = 0.7, group = "Routes principales")
-  
+              title = "Types de bateaux", opacity = 0.7) %>%
+    addLegend(position = "bottomleft", colors = "red", labels = "Routes principales",
+              title = "Routes principales", opacity = 0.7, group = "Routes principales")  
   return(map)
 } 
 
