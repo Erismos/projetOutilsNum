@@ -26,21 +26,19 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 .
 ├── data/                      # Données brutes et nettoyées
 │   ├── vessel-total-clean.csv
-│   └── vessel-cleaned.csv
+│   └── export_IA.csv
 ├── plots/                    # Graphiques statiques générés (PNG)
-│   ├── combined_direction_plots.png
-│   ├── vessel_type_distribution_enhanced.png
-│   ├── length_vs_width_by_type_enhanced.png
-│   ├── all_trajectories.png
-│   ├── single_trajectory.png
-│   └── main_routes.png
+│   └── ...
 ├── outputs/
-│   ├── stats_trajectoires.csv
 │   └── interactive_map.html
 ├── scripts/
-│   └── clement.R             # Script principal R
-├── generalPresentation.pdf   # Présentation générale du projet
-├── BigDataSubject.pdf        # Spécification de la partie Big Data
+│   ├── main.R             # Script principal R
+│   ├── data_cleaning.R
+│   ├── data_visualization.R
+│   ├──
+│   └── interactive_map.R
+├── subjects/
+│   └── ...   # PDF des sujets
 └── README.md
 ```
 
@@ -55,12 +53,14 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 * Calculs statistiques descriptifs
 * Sauvegarde du fichier nettoyé (`vessel-cleaned.csv`)
 
-### 2. Visualisations statiques
+### 2. Visualisations graphiques
 
 * Histogrammes directionnels (COG, Heading) en polaire
+* Itinéraire principaux et ports
+* Histogramme de vitesses
 * Répartition des navires par type
+* Camembert des status
 * Corrélation Longueur / Largeur par type de navire
-* Statistiques globales en texte
 
 ### 3. Cartographie
 
@@ -69,31 +69,25 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 * Détection des routes principales (clustering avec DBSCAN)
 * Carte interactive (Leaflet + Plotly) avec filtres dynamiques
 
+### 4. Etudes des corrélation
+
+### 5. Prédictions & régressions
+
 ---
 
 ## Technologies utilisées
 
-* **Langage** : R (v4.4.3 recommandé)
-* **Librairies principales** : `dplyr`, `ggplot2`, `leaflet`, `plotly`, `dbscan`, `sf`, `lubridate`, `viridis`, `htmlwidgets`
-* **Clustering** : DBSCAN pour l’identification des routes maritimes
-* **Visualisation interactive** : `leaflet`, `htmlwidgets`, `plotly`
+* **Langage** : R (v4.4.3)
+* **Librairies** : `readr`, `dplyr`, `ggplot2`, `cowplot`, `lubridate`, `viridis`, `RColorBrewer`, `maps`, `mapdata`, `ggmap`, `sf`, `leaflet`, `plotly`, `cluster`, `dbscan`, `htmlwidgets`, `corrplot`, `randomForest`, `caret`, `reshape2`
 
 ---
 
 ## Livrables
 
-* Script R commenté et fonctionnel (`clement.R`)
+* Scripts R commenté et fonctionnel (`scripts/`)
 * Figures PNG (`plots/`)
 * Cartes des itinéraires (`outputs/interactive_map.html`)
-* Fichier CSV nettoyé pour export IA (`vessel-cleaned.csv`)
+* Fichier CSV nettoyé pour export IA (`data/export_IA.csv`)
 * Rapport d'interpretations
 * [Gantt](https://yncrea-my.sharepoint.com/:x:/g/personal/gabriel_boucneau_isen-ouest_yncrea_fr/EeFyss4CFzFLqRMh9ZACRXUBCnqPZFdicaM9cvkcB_6CRw?e=efSeLb)
 
----
-
-## TODO
-
-* [ ] Compléter l’analyse de corrélation (mosaicplot, chi²)
-* [ ] Implémenter la régression logistique (IA)
-* [ ] Ajouter les ports principaux dans la carte interactive
-* [ ] Intégrer tout dans l’application web finale

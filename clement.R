@@ -9,10 +9,9 @@
 #               : Il inclut également des visualisations interactives
 #               : et des statistiques descriptives.
 # Version      : 1.0
-# R Version    : ex: 4.4.3
+# R Version    : 4.4.3
 # Dependencies : readr, dplyr, ggplot2, lubridate, viridis, RColorBrewer,
-# Notes        : Todo [reprendre partie 1 de laure et adapter à mon code;
-#              :       Modifier clustering de port pour zones plus grandes;]
+# Notes        : []
 ############################################################
 
 # Libraries
@@ -171,30 +170,36 @@ main_data_cleaning()
 ####################################################
 
 print("Fonctionnalité 2: Graphiques pour l'analyse des données de bateaux")
-# Chargement des données
-data <- read.csv("data/vessel-cleaned.csv")
 
-# Préparation des données
-data$BaseDateTime <- as.POSIXct(data$BaseDateTime, format="%Y-%m-%d %H:%M:%S")
-data$Hour <- hour(data$BaseDateTime)
-data$Date <- as.Date(data$BaseDateTime)
-data$Length_num <- as.numeric(as.character(data$Length))
-data$Width_num <- as.numeric(as.character(data$Width))
-
-# Thème personnalisé
-theme_marine <- theme_minimal() +
-  theme(
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray60"),
-    axis.title = element_text(size = 12),
-    legend.title = element_text(size = 11, face = "bold"),
-    panel.grid.minor = element_blank(),
-    plot.background = element_rect(fill = "white", color = NA)
-  )
-
+# Fonction pour charger et préparer les données
+load_and_prepare_data <- function(file_path) {
+  data <- read.csv(file_path)
   
-# Fonction pour créer un diagramme polaire amélioré
-create_polar_plot <- function(var, title, color) {
+  # Préparation des données
+  data$BaseDateTime <- as.POSIXct(data$BaseDateTime, format="%Y-%m-%d %H:%M:%S")
+  data$Hour <- hour(data$BaseDateTime)
+  data$Date <- as.Date(data$BaseDateTime)
+  data$Length_num <- as.numeric(as.character(data$Length))
+  data$Width_num <- as.numeric(as.character(data$Width))
+  
+  return(data)
+}
+
+# Définition du thème personnalisé
+get_marine_theme <- function() {
+  theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray60"),
+      axis.title = element_text(size = 12),
+      legend.title = element_text(size = 11, face = "bold"),
+      panel.grid.minor = element_blank(),
+      plot.background = element_rect(fill = "white", color = NA)
+    )
+}
+
+# Fonction pour créer un diagramme polaire
+create_polar_plot <- function(data, var, title, color) {
   ggplot(data, aes(x = {{var}})) +
     geom_histogram(binwidth = 15, fill = color, color = "white", alpha = 0.8) +
     coord_polar(start = -pi/16) +
@@ -208,118 +213,198 @@ create_polar_plot <- function(var, title, color) {
     )
 }
 
-# COG et Heading côte à côte
-p1 <- create_polar_plot(COG, "Distribution des directions (COG)", "#4e79a7")
-p2 <- create_polar_plot(Heading, "Distribution des caps (Heading)", "#e15759")
-combined_polar <- plot_grid(p1, p2, ncol = 2)
+# Fonction pour créer le graphique de répartition par type de bateau
+plot_vessel_type_distribution <- function(data, theme) {
+  vessel_type_counts <- data %>%
+    count(VesselType, sort = TRUE) %>%
+    mutate(percentage = round(n/sum(n)*100, 1))
+  
+  ggplot(vessel_type_counts, aes(x = reorder(as.factor(VesselType), n), y = n)) +
+    geom_col(fill = "steelblue", color = "navy", alpha = 0.8) +
+    geom_text(aes(label = paste0(n, " (", percentage, "%)")), 
+              hjust = -0.1, size = 3.5) +
+    coord_flip() +
+    labs(title = "Répartition des bateaux par type",
+         subtitle = "Nombre total et pourcentage par catégorie",
+         x = "Type de bateau",
+         y = "Nombre de bateaux") +
+    theme +
+    theme(axis.text.x = element_text(angle = 0))
+}
 
-ggsave("plots/combined_direction_plots.png", combined_polar, width = 12, height = 6)
+# Fonction pour créer le graphique longueur/largeur
+plot_length_width <- function(data, theme) {
+  length_width_clean <- data %>%
+    filter(!is.na(Length_num) & !is.na(Width_num) & 
+           Length_num > 0 & Width_num > 0 & 
+           Length_num < 500 & Width_num < 100) %>%
+    group_by(VesselType) %>%
+    filter(n() >= 50) %>%
+    ungroup()
+  
+  ggplot(length_width_clean, aes(x = Length_num, y = Width_num, color = as.factor(VesselType))) +
+    geom_point(alpha = 0.6, size = 1.5) +
+    geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.8) +
+    scale_color_viridis_d(name = "Type de\nbateau") +
+    labs(title = "Relation entre longueur et largeur des bateaux",
+         subtitle = "Corrélation par type de navire avec tendances",
+         x = "Longueur (mètres)",
+         y = "Largeur (mètres)") +
+    theme +
+    theme(legend.position = "right") +
+    facet_wrap(~VesselType, scales = "free", ncol = 3)
+}
 
+# Fonction pour créer l'histogramme des vitesses
+plot_speed_distribution <- function(data) {
+  ggplot(data, aes(x = SOG)) +
+    geom_histogram(bins = 30, fill = "lightblue", color = "darkblue", alpha = 0.7) +
+    labs(title = "Distribution des vitesses (SOG)",
+         x = "Vitesse sur le fond (nœuds)", y = "Fréquence") +
+    geom_vline(aes(xintercept = mean(SOG, na.rm = TRUE)),
+               color = "red", linetype = "dashed", size = 1) +
+    annotate("text", x = mean(data$SOG, na.rm = TRUE) + 2, 
+             y = max(table(cut(data$SOG, 30))) * 0.8,
+             label = paste("Moyenne:", round(mean(data$SOG, na.rm = TRUE), 1), "nœuds"),
+             color = "red")
+}
 
-# RÉPARTITION DES BATEAUX PAR TYPE
-vessel_type_counts <- data %>%
-  count(VesselType, sort = TRUE) %>%
-  mutate(percentage = round(n/sum(n)*100, 1))
-
-ggplot(vessel_type_counts, aes(x = reorder(as.factor(VesselType), n), y = n)) +
-  geom_col(fill = "steelblue", color = "navy", alpha = 0.8) +
-  geom_text(aes(label = paste0(n, " (", percentage, "%)")), 
-            hjust = -0.1, size = 3.5) +
-  coord_flip() +
-  labs(title = "Répartition des bateaux par type",
-       subtitle = "Nombre total et pourcentage par catégorie",
-       x = "Type de bateau",
-       y = "Nombre de bateaux") +
-  theme_marine +
-  theme(axis.text.x = element_text(angle = 0))
-ggsave("plots/vessel_type_distribution.png", width = 12, height = 8, dpi = 300)
-
-
-# RELATION LONGUEUR/LARGEUR PAR TYPE
-length_width_clean <- data %>%
-  filter(!is.na(Length_num) & !is.na(Width_num) & 
-         Length_num > 0 & Width_num > 0 & 
-         Length_num < 500 & Width_num < 100) %>%  # Filtrer les valeurs aberrantes
-  group_by(VesselType) %>%
-  filter(n() >= 50) %>%  # Garder seulement les types avec assez de données
-  ungroup()
-
-ggplot(length_width_clean, aes(x = Length_num, y = Width_num, color = as.factor(VesselType))) +
-  geom_point(alpha = 0.6, size = 1.5) +
-  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.8) +
-  scale_color_viridis_d(name = "Type de\nbateau") +
-  labs(title = "Relation entre longueur et largeur des bateaux",
-       subtitle = "Corrélation par type de navire avec tendances",
-       x = "Longueur (mètres)",
-       y = "Largeur (mètres)") +
-  theme_marine +
-  theme(legend.position = "right") +
-  facet_wrap(~VesselType, scales = "free", ncol = 3)
-ggsave("plots/length_vs_width_by_type.png", width = 15, height = 12, dpi = 300)
-
-# RÉSUMÉ STATISTIQUE VISUEL
-summary_stats <- data %>%
-  summarise(
-    total_vessels = n(),
-    unique_types = n_distinct(VesselType),
-    avg_speed = round(mean(SOG, na.rm = TRUE), 1),
-    max_speed = round(max(SOG, na.rm = TRUE), 1),
-    avg_length = round(mean(Length_num, na.rm = TRUE), 1),
-    date_range = paste(min(Date, na.rm = TRUE), "à", max(Date, na.rm = TRUE))
+# Fonction pour créer le camembert des statuts
+plot_status_pie <- function(data) {
+  statuts_count <- table(data$Status)
+  statuts_data <- data.frame(
+    Status = names(statuts_count),
+    n = as.numeric(statuts_count),
+    stringsAsFactors = FALSE
   )
+  statuts_data$pourcentage <- statuts_data$n / sum(statuts_data$n) * 100
+  
+  ggplot(statuts_data, aes(x = "", y = n, fill = Status)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar("y", start = 0) +
+    labs(title = "Répartition des statuts des navires") +
+    theme_void() +
+    geom_text(aes(label = paste0(round(pourcentage, 1), "%")), 
+              position = position_stack(vjust = 0.5),
+              size = 3) +
+    theme(legend.position = "right",
+          legend.text = element_text(size = 8))
+}
 
-# Affichage des statistiques
-cat("=== RÉSUMÉ DE L'ANALYSE ===\n")
-cat("Nombre total d'observations:", summary_stats$total_vessels, "\n")
-cat("Types de navires uniques:", summary_stats$unique_types, "\n")
-cat("Vitesse moyenne:", summary_stats$avg_speed, "nœuds\n")
-cat("Vitesse maximale:", summary_stats$max_speed, "nœuds\n")
-cat("Longueur moyenne:", summary_stats$avg_length, "mètres\n")
-cat("Période d'observation:", summary_stats$date_range, "\n")
-cat("========================\n")
+# Fonction pour créer la carte de densité
+plot_density_map <- function(data) {
+  ggplot(data, aes(x = LON, y = LAT)) +
+    geom_point(alpha = 0.4, size = 0.5, color = "steelblue") +
+    stat_density_2d(color = "red", size = 0.8, bins = 10) +
+    labs(title = "Carte de densité avec contours",
+         subtitle = "Lignes de niveau de concentration des navires",
+         x = "Longitude", y = "Latitude") +
+    theme_minimal()
+}
 
-print("Tous les graphiques ont été générés avec succès dans le dossier 'plots/'")
-print("Résolution: 300 DPI pour impression haute qualité")
+# Fonction pour afficher les statistiques résumées
+display_summary_stats <- function(data) {
+  summary_stats <- data %>%
+    summarise(
+      total_vessels = n(),
+      unique_types = n_distinct(VesselType),
+      avg_speed = round(mean(SOG, na.rm = TRUE), 1),
+      max_speed = round(max(SOG, na.rm = TRUE), 1),
+      avg_length = round(mean(Length_num, na.rm = TRUE), 1),
+      date_range = paste(min(Date, na.rm = TRUE), "à", max(Date, na.rm = TRUE))
+    )
+  
+  cat("=== RÉSUMÉ DE L'ANALYSE ===\n")
+  cat("Nombre total d'observations:", summary_stats$total_vessels, "\n")
+  cat("Types de navires uniques:", summary_stats$unique_types, "\n")
+  cat("Vitesse moyenne:", summary_stats$avg_speed, "nœuds\n")
+  cat("Vitesse maximale:", summary_stats$max_speed, "nœuds\n")
+  cat("Longueur moyenne:", summary_stats$avg_length, "mètres\n")
+  cat("Période d'observation:", summary_stats$date_range, "\n")
+  cat("========================\n")
+}
 
+# Fonction principale pour générer tous les graphiques
+generate_all_plots <- function() {
+  # Chargement des données
+  data <- load_and_prepare_data("data/vessel-cleaned.csv")
+  
+  # Récupération du thème
+  marine_theme <- get_marine_theme()
+  
+  # Création des graphiques polaires combinés
+  p1 <- create_polar_plot(data, COG, "Distribution des directions (COG)", "#4e79a7")
+  p2 <- create_polar_plot(data, Heading, "Distribution des caps (Heading)", "#e15759")
+  combined_polar <- plot_grid(p1, p2, ncol = 2)
+  ggsave("plots/combined_direction_plots.png", combined_polar, width = 12, height = 6)
+  
+  # Graphique de répartition par type
+  vessel_type_plot <- plot_vessel_type_distribution(data, marine_theme)
+  ggsave("plots/vessel_type_distribution.png", vessel_type_plot, width = 12, height = 8, dpi = 300)
+  
+  # Graphique longueur/largeur
+  length_width_plot <- plot_length_width(data, marine_theme)
+  ggsave("plots/length_vs_width_by_type.png", length_width_plot, width = 15, height = 12, dpi = 300)
+  
+  # Histogramme des vitesses
+  speed_plot <- plot_speed_distribution(data)
+  ggsave("plots/histogramme_vitesses.png", speed_plot, width = 10, height = 6, dpi = 300, bg = "white")
+  
+  # Camembert des statuts
+  status_pie <- plot_status_pie(data)
+  ggsave("plots/repartition_statuts.png", status_pie, width = 12, height = 8, dpi = 300, bg = "white")
+  
+  # Carte de densité
+  density_map <- plot_density_map(data)
+  ggsave("plots/heatmap_contours.png", density_map, width = 12, height = 8, dpi = 300, bg = "white")
+  
+  # Affichage des statistiques
+  display_summary_stats(data)
+  
+  print("Tous les graphiques ont été générés avec succès dans le dossier 'plots/'")
+}
+
+# Exécution de la fonction principale
+generate_all_plots()
 
 
 ####################################################
 # Fonctionnalité 3: Carte interactive #
 ####################################################
 
-# Carte interactive Leaflet
-create_interactive_map <- function(data, max_vessels = 142) {
-  print("Filtrage des données pour la carte interactive...")
+print("Fonctionnalité 3: Carte interactive")
+
+# Fonction pour détecter les arrêts des navires
+detect_stops <- function(traj, speed_threshold = 1, duration_threshold = 4) {
+  traj <- traj %>% arrange(BaseDateTime)
+  
+  stopped_points <- traj %>% 
+    mutate(stopped = SOG < speed_threshold) %>%
+    mutate(stop_group = cumsum(stopped != lag(stopped, default = first(stopped))))
+  
+  stop_durations <- stopped_points %>%
+    filter(stopped) %>%
+    group_by(stop_group) %>%
+    summarise(
+      start_time = min(BaseDateTime),
+      end_time = max(BaseDateTime),
+      duration = as.numeric(difftime(end_time, start_time, units = "hours")),
+      mean_lon = mean(LON),
+      mean_lat = mean(LAT),
+      start_draft = first(Draft),
+      end_draft = last(Draft),
+      draft_change = end_draft - start_draft,
+      .groups = 'drop'
+    ) %>%
+    filter(duration >= duration_threshold)
+  
+  return(stop_durations)
+}
+
+# Fonction pour préparer les données des navires
+prepare_vessel_data <- function(data, max_vessels = 142) {
   vessels_to_plot <- unique(data$VesselName)[1:min(max_vessels, length(unique(data$VesselName)))]
   
-  # Fonction pour détecter les arrêts
-  detect_stops <- function(traj, speed_threshold = 1, duration_threshold = 4) {
-    traj <- traj %>% arrange(BaseDateTime)
-    
-    stopped_points <- traj %>% 
-      mutate(stopped = SOG < speed_threshold) %>%
-      mutate(stop_group = cumsum(stopped != lag(stopped, default = first(stopped))))
-    
-    stop_durations <- stopped_points %>%
-      filter(stopped) %>%
-      group_by(stop_group) %>%
-      summarise(
-        start_time = min(BaseDateTime),
-        end_time = max(BaseDateTime),
-        duration = as.numeric(difftime(end_time, start_time, units = "hours")),
-        mean_lon = mean(LON),
-        mean_lat = mean(LAT),
-        start_draft = first(Draft),
-        end_draft = last(Draft),
-        draft_change = end_draft - start_draft,
-        .groups = 'drop'
-      ) %>%
-      filter(duration >= duration_threshold)
-    
-    return(stop_durations)
-  }
-  
-  # Pré-traitement des données
   data_filtered <- data %>%
     filter(VesselName %in% vessels_to_plot) %>%
     mutate(VesselType = ifelse(is.na(VesselType), "Inconnu", as.character(VesselType))) %>%
@@ -339,7 +424,11 @@ create_interactive_map <- function(data, max_vessels = 142) {
     ) %>%
     ungroup()
   
-  # Détection des ports (uniquement pour les cargos)
+  return(data_filtered)
+}
+
+# Fonction pour détecter les zones portuaires
+detect_port_zones <- function(data_filtered) {
   port_zones <- data.frame()
   cargo_vessels <- unique(data_filtered$VesselName[data_filtered$is_cargo])
   
@@ -369,54 +458,42 @@ create_interactive_map <- function(data, max_vessels = 142) {
     }
   }
   
-  # Clustering des zones de port - seulement si plusieurs bateaux
-  if (nrow(port_zones) > 0) {
-    port_zones_sf <- st_as_sf(port_zones, coords = c("mean_lon", "mean_lat"), crs = 4326)
-    
-    # On augmente légèrement le eps pour mieux regrouper les points proches
-    clustered <- dbscan(st_coordinates(port_zones_sf), eps = 0.15, minPts = 2)
-    
-    port_zones <- port_zones %>%
-      mutate(cluster = clustered$cluster) %>%
-      # On ne garde que les clusters avec au moins 2 bateaux différents
-      group_by(cluster) %>%
-      mutate(n_vessels = n_distinct(VesselName)) %>%
-      ungroup() %>%
-      filter(cluster > 0 & n_vessels >= 2) %>%
-      # Regroupement final
-      group_by(cluster) %>%
-      summarise(
-        mean_lon = mean(mean_lon),
-        mean_lat = mean(mean_lat),
-        n_operations = n(),
-        n_vessels = n_distinct(VesselName),
-        mean_draft_change = mean(draft_change, na.rm = TRUE),
-        activities = paste(unique(port_activity), collapse = ", "),
-        vessels = paste(unique(VesselName), collapse = ", "),
-        .groups = 'drop'
-      ) %>%
-      # On filtre pour ne garder que les zones avec activité portuaire
-      filter(activities != "")
-  }
+  return(port_zones)
+}
+
+# Fonction pour regrouper les zones portuaires similaires
+cluster_port_zones <- function(port_zones) {
+  if (nrow(port_zones) == 0) return(data.frame())
   
-  # Préparation de la carte
-  vessel_types <- unique(data_filtered$VesselType)
-  type_palette <- colorFactor(palette = "Set1", domain = vessel_types)
-  port_palette <- colorFactor(palette = c("blue", "red", "darkblue", "darkred", "gray"), 
-                             domain = c("Chargement", "Chargement majeur", "Déchargement", "Déchargement majeur", "Arrêt simple"))
+  port_zones_sf <- st_as_sf(port_zones, coords = c("mean_lon", "mean_lat"), crs = 4326)
+  clustered <- dbscan(st_coordinates(port_zones_sf), eps = 0.15, minPts = 2)
   
-  map <- leaflet() %>%
-    addTiles() %>%
-    setView(lng = mean(data_filtered$LON, na.rm = TRUE), lat = mean(data_filtered$LAT, na.rm = TRUE), zoom = 6) %>%
-    addLayersControl(
-      overlayGroups = c("Tous les bateaux", vessel_types, "Cargos", "Chargé", 
-                       "Zones de port", "Chargement", "Déchargement", "Routes principales"),
-      options = layersControlOptions(collapsed = FALSE),
-      position = "topright"
+  clustered_zones <- port_zones %>%
+    mutate(cluster = clustered$cluster) %>%
+    group_by(cluster) %>%
+    mutate(n_vessels = n_distinct(VesselName)) %>%
+    ungroup() %>%
+    filter(cluster > 0 & n_vessels >= 2) %>%
+    group_by(cluster) %>%
+    summarise(
+      mean_lon = mean(mean_lon),
+      mean_lat = mean(mean_lat),
+      n_operations = n(),
+      n_vessels = n_distinct(VesselName),
+      mean_draft_change = mean(draft_change, na.rm = TRUE),
+      activities = paste(unique(port_activity), collapse = ", "),
+      vessels = paste(unique(VesselName), collapse = ", "),
+      .groups = 'drop'
     ) %>%
-    hideGroup(c(vessel_types, "Cargos", "Chargé", "Chargement", "Déchargement"))
+    filter(activities != "")
   
-  # Ajout des trajectoires (avec routes principales)
+  return(list(clustered_zones = clustered_zones, port_zones_sf = port_zones_sf))
+}
+
+# Fonction pour ajouter les trajectoires à la carte
+add_trajectories_to_map <- function(map, data_filtered, type_palette) {
+  vessel_types <- unique(data_filtered$VesselType)
+  
   for (vessel_type in vessel_types) {
     type_data <- data_filtered %>% filter(VesselType == vessel_type)
     for (vessel_name in unique(type_data$VesselName)) {
@@ -426,27 +503,7 @@ create_interactive_map <- function(data, max_vessels = 142) {
           slice(1) %>% 
           select(VesselName, VesselType, Length, Width, is_cargo, is_loaded, loading_status, mean_draft)
         
-        popup_content <- paste(
-          "<h2>Bateau:", vessel_info$VesselName, "</h2>Type:", vessel_info$VesselType,
-          "<br>Longueur (m):", round(vessel_info$Length, 2),
-          "<br>Largeur (m):", round(vessel_info$Width, 2)
-        )
-        
-        if (vessel_info$is_cargo) {
-          popup_content <- paste0(
-            popup_content,
-            "<br>Tirant d'eau moyen (m):", round(vessel_info$mean_draft, 2),
-            "<br>Statut de chargement:", vessel_info$loading_status
-          )
-        }
-        
-        popup_content <- paste0(
-          popup_content,
-          "<hr>Distance totale (km):", round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2), na.rm = TRUE) * 111, 2),
-          "<br>Vitesse moyenne (nœuds):", round(mean(traj$SOG, na.rm = TRUE), 2),
-          "<br>Vitesse maximale (nœuds):", round(max(traj$SOG, na.rm = TRUE), 2),
-          "<br>Date de début:", min(traj$BaseDateTime), "<br>Date de fin:", max(traj$BaseDateTime)
-        )
+        popup_content <- create_vessel_popup(vessel_info, traj)
         
         groups <- c("Tous les bateaux", vessel_type)
         if (vessel_info$is_cargo) groups <- c(groups, "Cargos")
@@ -460,7 +517,6 @@ create_interactive_map <- function(data, max_vessels = 142) {
             group = groups,
             popup = popup_content
           ) %>%
-          # Ajout des routes principales
           addPolylines(
             lng = traj$LON, lat = traj$LAT, 
             color = "red", weight = 15,
@@ -470,52 +526,92 @@ create_interactive_map <- function(data, max_vessels = 142) {
     }
   }
   
+  return(map)
+}
+
+# Fonction pour créer le contenu des popups
+create_vessel_popup <- function(vessel_info, traj) {
+  popup_content <- paste(
+    "<h2>Bateau:", vessel_info$VesselName, "</h2>Type:", vessel_info$VesselType,
+    "<br>Longueur (m):", round(vessel_info$Length, 2),
+    "<br>Largeur (m):", round(vessel_info$Width, 2)
+  )
   
-  # Ajout des zones de port seulement si elles existent
-  if (exists("port_zones") && nrow(port_zones) > 0) {
+  if (vessel_info$is_cargo) {
+    popup_content <- paste0(
+      popup_content,
+      "<br>Tirant d'eau moyen (m):", round(vessel_info$mean_draft, 2),
+      "<br>Statut de chargement:", vessel_info$loading_status
+    )
+  }
+  
+  popup_content <- paste0(
+    popup_content,
+    "<hr>Distance totale (km):", round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2), na.rm = TRUE) * 111, 2),
+    "<br>Vitesse moyenne (nœuds):", round(mean(traj$SOG, na.rm = TRUE), 2),
+    "<br>Vitesse maximale (nœuds):", round(max(traj$SOG, na.rm = TRUE), 2),
+    "<br>Date de début:", min(traj$BaseDateTime), "<br>Date de fin:", max(traj$BaseDateTime)
+  )
+  
+  return(popup_content)
+}
+
+# Fonction pour ajouter les zones portuaires à la carte
+add_port_zones_to_map <- function(map, port_data) {
+  if (nrow(port_data$clustered_zones) == 0) return(map)
+  
+  map <- map %>%
+    addCircleMarkers(
+      data = port_data$clustered_zones,
+      lng = ~mean_lon, lat = ~mean_lat,
+      radius = ~sqrt(n_operations)*3,
+      color = ~ifelse(mean_draft_change < 0, "red", "blue"),
+      fillOpacity = 0.7,
+      stroke = TRUE,
+      weight = 1,
+      group = "Zones de port",
+      popup = ~paste(
+        "<h3>Zone portuaire confirmée</h3>",
+        "Nombre de bateaux:", n_vessels,
+        "<br>Opérations:", n_operations,
+        "<br>Activités:", activities,
+        "<br>Bateaux:", substr(vessels, 1, 100), "..."
+      )
+    )
+  
+  if (nrow(port_data$port_zones_sf) > 0) {
+    port_palette <- colorFactor(
+      palette = c("blue", "red", "darkblue", "darkred", "gray"), 
+      domain = c("Chargement", "Chargement majeur", "Déchargement", "Déchargement majeur", "Arrêt simple")
+    )
+    
     map <- map %>%
       addCircleMarkers(
-        data = port_zones,
-        lng = ~mean_lon, lat = ~mean_lat,
-        radius = ~sqrt(n_operations)*3,
-        color = ~ifelse(mean_draft_change < 0, "red", "blue"),
+        data = port_data$port_zones_sf,
+        radius = 5,
+        color = ~port_palette(port_activity),
         fillOpacity = 0.7,
         stroke = TRUE,
         weight = 1,
-        group = "Zones de port",
+        group = ~ifelse(grepl("Chargement", port_activity), "Chargement", "Déchargement"),
         popup = ~paste(
-          "<h3>Zone portuaire confirmée</h3>",
-          "Nombre de bateaux:", n_vessels,
-          "<br>Opérations:", n_operations,
-          "<br>Activités:", activities,
-          "<br>Bateaux:", substr(vessels, 1, 100), "..."
+          "<h3>Activité portuaire</h3>",
+          "<br>Bateau:", VesselName,
+          "<br>Type:", VesselType,
+          "<br>Activité:", port_activity,
+          "<br>Durée:", round(duration, 1), "heures",
+          "<br>Δ tirant d'eau:", round(draft_change, 2), "m"
         )
       )
-  
-    # Ajout des points individuels
-    if (exists("port_zones_sf") && nrow(port_zones_sf) > 0) {
-      map <- map %>%
-        addCircleMarkers(
-          data = port_zones_sf,
-          radius = 5,
-          color = ~port_palette(port_activity),
-          fillOpacity = 0.7,
-          stroke = TRUE,
-          weight = 1,
-          group = ~ifelse(grepl("Chargement", port_activity), "Chargement", "Déchargement"),
-          popup = ~paste(
-            "<h3>Activité portuaire</h3>",
-            "<br>Bateau:", VesselName,
-            "<br>Type:", VesselType,
-            "<br>Activité:", port_activity,
-            "<br>Durée:", round(duration, 1), "heures",
-            "<br>Δ tirant d'eau:", round(draft_change, 2), "m"
-          )
-        )
-    }
   }
   
-  # Légendes
+  return(map)
+}
+
+# Fonction pour ajouter les légendes à la carte
+add_map_legends <- function(map, vessel_types, port_zones_exist = FALSE) {
+  type_palette <- colorFactor(palette = "Set1", domain = vessel_types)
+  
   map <- map %>%
     addLegend(position = "bottomright", pal = type_palette, values = vessel_types,
               title = "Types de bateaux", opacity = 0.7) %>%
@@ -524,7 +620,7 @@ create_interactive_map <- function(data, max_vessels = 142) {
               labels = c("Routes principales"),
               title = "Routes", opacity = 0.7)
   
-  if (exists("port_zones") && nrow(port_zones) > 0) {
+  if (port_zones_exist) {
     map <- map %>%
       addLegend(position = "topleft", 
                 colors = c("blue", "red"), 
@@ -536,99 +632,61 @@ create_interactive_map <- function(data, max_vessels = 142) {
   return(map)
 }
 
+# Fonction principale pour créer la carte interactive
+create_interactive_map <- function(data, max_vessels = 142) {
+  print("Filtrage des données pour la carte interactive...")
+  
+  # Préparation des données
+  data_filtered <- prepare_vessel_data(data, max_vessels)
+  
+  # Détection des zones portuaires
+  port_zones <- detect_port_zones(data_filtered)
+  port_data <- cluster_port_zones(port_zones)
+  
+  # Initialisation de la carte
+  vessel_types <- unique(data_filtered$VesselType)
+  type_palette <- colorFactor(palette = "Set1", domain = vessel_types)
+  
+  map <- leaflet() %>%
+    addTiles() %>%
+    setView(lng = mean(data_filtered$LON, na.rm = TRUE), lat = mean(data_filtered$LAT, na.rm = TRUE), zoom = 6) %>%
+    addLayersControl(
+      overlayGroups = c("Tous les bateaux", vessel_types, "Cargos", "Chargé", 
+                       "Zones de port", "Chargement", "Déchargement", "Routes principales"),
+      options = layersControlOptions(collapsed = FALSE),
+      position = "topright"
+    ) %>%
+    hideGroup(c(vessel_types, "Cargos", "Chargé", "Chargement", "Déchargement"))
+  
+  # Ajout des éléments à la carte
+  map <- add_trajectories_to_map(map, data_filtered, type_palette)
+  map <- add_port_zones_to_map(map, port_data)
+  map <- add_map_legends(map, vessel_types, nrow(port_data$clustered_zones) > 0)
+  
+  return(map)
+}
 
-# Calls
-print("Fonctionnalité 3: Carte interactive")
+# Fonction pour charger et préparer les données
+load_and_prepare_data <- function(file_path) {
+  data <- read.csv(file_path)
+  data$BaseDateTime <- as.POSIXct(data$BaseDateTime, format="%Y-%m-%d %H:%M:%S")
+  data <- data %>% arrange(VesselName, BaseDateTime)
+  return(data)
+}
 
-vessel_data <- read.csv("data/vessel-cleaned.csv")
-vessel_data$BaseDateTime <- as.POSIXct(vessel_data$BaseDateTime, format="%Y-%m-%d %H:%M:%S")
-vessel_data <- vessel_data %>% arrange(VesselName, BaseDateTime)
+# Fonction principale pour exécuter tout le processus
+main_interactive_map <- function() {
+  print("Chargement des données...")
+  vessel_data <- load_and_prepare_data("data/vessel-cleaned.csv")
+  
+  print("Génération de la carte interactive...")
+  interactive_map <- create_interactive_map(vessel_data)
+  
+  print("Sauvegarde de la carte...")
+  saveWidget(interactive_map, "outputs/interactive_map.html", selfcontained = TRUE)
+  
+  print("Terminé.")
+}
 
-print("Génération de la carte interactive...")
-# Génération de la carte interactive
-interactive_map <- create_interactive_map(vessel_data)
-saveWidget(interactive_map, "outputs/interactive_map.html", selfcontained = TRUE)
-
-print("Terminé.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# hist_vitesses <- ggplot(data, aes(x = SOG)) +
-#   geom_histogram(bins = 30, fill = "lightblue", color = "darkblue", alpha = 0.7) +
-#   # légende
-#   labs(title = "Distribution des vitesses (SOG)",
-#        x = "Vitesse sur le fond (nœuds)", y = "Fréquence") +
-#   geom_vline(aes(xintercept = mean(SOG, na.rm = TRUE)), # on ajoute une ligne verticale pointillée rouge à la moyenne des vitesses
-#              color = "red", linetype = "dashed", size = 1) +
-#     # on ajoute une annotation texte près de la ligne moyenne, avec la valeur moyenne arrondie à 1 décimale
-#   annotate("text", x = mean(data$SOG, na.rm = TRUE) + 2, 
-#            y = max(table(cut(data$SOG, 30))) * 0.8,
-#            label = paste("Moyenne:", round(mean(data$SOG, na.rm = TRUE), 1), "nœuds"),
-#            color = "red")
-
-# ggsave("histogramme_vitesses.png", hist_vitesses, 
-#        width = 10, height = 6, dpi = 300, bg = "white")
-
-# statuts_count <- table(data$Status) # calcul le nombre d'occurence de chaque status
-# # créer un dataframe avec les status et leurs comptes
-# statuts_data <- data.frame( 
-#   Status = names(statuts_count),
-#   n = as.numeric(statuts_count),
-#   stringsAsFactors = FALSE
-# )
-# # on calcul les pourcentages pour chaque status
-# statuts_data$pourcentage <- statuts_data$n / sum(statuts_data$n) * 100
-
-# # Graphique en secteurs (camemberts)
-# # on initialise un graphique vide pour faire un camembert 
-# statuts_pie <- ggplot(statuts_data, aes(x = "", y = n, fill = Status)) +
-#     # on ajoute une barre pleine pour chaque status
-#   geom_bar(stat = "identity", width = 1) +
-#   # on convertit les barres en graphiques circulaires
-#   coord_polar("y", start = 0) +
-#   # ajout du titre
-#   labs(title = "Répartition des statuts des navires") +
-#   # on supprime tous les axes
-#   theme_void() +
-#   # on ajoute le pourcentage à l'intérieur du graphique
-#   geom_text(aes(label = paste0(round(pourcentage, 1), "%")), 
-#             position = position_stack(vjust = 0.5),
-#             size = 3) +
-#     # on met la légende à droite et on change la taille du texte
-#   theme(legend.position = "right",
-#         legend.text = element_text(size = 8))
-# # on suavegarde le graphique en une image de format png
-# ggsave("repartition_statuts.png", statuts_pie, 
-#        width = 12, height = 8, dpi = 300, bg = "white")
-
-# # Version avec contours uniquement 
-# # on affiche les points des navires en bleu acier
-# heatmap_contours <- ggplot(data, aes(x = LON, y = LAT)) +
-#   geom_point(alpha = 0.4, size = 0.5, color = "steelblue") +
-#   # on superpose les lignes de niveau de densité (contours rouges)
-#   stat_density_2d(color = "red", size = 0.8, bins = 10) +
-#   # légende
-#   labs(title = "Carte de densité avec contours",
-#        subtitle = "Lignes de niveau de concentration des navires",
-#        x = "Longitude", y = "Latitude") +
-#   theme_minimal()
-# # sauvegarde
-# ggsave("heatmap_contours.png", heatmap_contours, 
-#        width = 12, height = 8, dpi = 300, bg = "white")
+# Exécution du programme
+main_interactive_map()
