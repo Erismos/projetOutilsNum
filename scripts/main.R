@@ -18,10 +18,13 @@
 source("scripts/data_cleaning.R")
 source("scripts/data_visualization.R")
 source("scripts/interactive_map.R")
+source("scripts/statistical_analysis.R")
 
 # exécuter les fonctions principales
 main_data_cleaning()
 generate_all_plots()
 main_interactive_map()
+analysis_results <- main()
+print(analysis_results)
 
 

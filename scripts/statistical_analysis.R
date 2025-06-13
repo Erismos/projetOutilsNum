@@ -174,4 +174,4 @@ main <- function() {
 }
 
 # Lancement de l'analyse
-analysis_results <- main()
+# analysis_results <- main()
