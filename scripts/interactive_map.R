@@ -96,9 +96,7 @@ detect_port_zones <- function(data_filtered) {
         stops <- stops %>%
           mutate(
             port_activity = case_when(
-              draft_change > 1 ~ "Déchargement majeur",
               draft_change > 0.3 ~ "Déchargement",
-              draft_change < -1 ~ "Chargement majeur",
               draft_change < -0.3 ~ "Chargement",
               TRUE ~ "Arrêt simple"
             ),
@@ -118,14 +116,14 @@ cluster_port_zones <- function(port_zones) {
   if (nrow(port_zones) == 0) return(data.frame())
   
   port_zones_sf <- st_as_sf(port_zones, coords = c("mean_lon", "mean_lat"), crs = 4326)
-  clustered <- dbscan(st_coordinates(port_zones_sf), eps = 0.15, minPts = 2)
+  clustered <- dbscan(st_coordinates(port_zones_sf), eps = 0.4, minPts = 3)
   
   clustered_zones <- port_zones %>%
     mutate(cluster = clustered$cluster) %>%
     group_by(cluster) %>%
     mutate(n_vessels = n_distinct(VesselName)) %>%
     ungroup() %>%
-    filter(cluster > 0 & n_vessels >= 2) %>%
+    filter(cluster > 0 & n_vessels >= 4) %>%
     group_by(cluster) %>%
     summarise(
       mean_lon = mean(mean_lon),
@@ -149,11 +147,12 @@ add_trajectories_to_map <- function(map, data_filtered, type_palette) {
   for (vessel_type in vessel_types) {
     type_data <- data_filtered %>% filter(VesselType == vessel_type)
     for (vessel_name in unique(type_data$VesselName)) {
-      traj <- type_data %>% filter(VesselName == vessel_name) %>% arrange(BaseDateTime)
+      traj <- type_data %>% filter(VesselName == vessel_name) %>%
+        arrange(BaseDateTime)
       if (nrow(traj) > 1) {
-        vessel_info <- traj %>% 
-          slice(1) %>% 
-          select(VesselName, VesselType, Length, Width, is_cargo, is_loaded, loading_status, mean_draft)
+        vessel_info <- traj %>% slice(1) %>%
+          select(VesselName, VesselType, Length, Width, is_cargo, is_loaded,
+                 loading_status, mean_draft)
         
         popup_content <- create_vessel_popup(vessel_info, traj)
         
@@ -177,7 +176,7 @@ add_trajectories_to_map <- function(map, data_filtered, type_palette) {
       }
     }
   }
-  
+
   return(map)
 }
 
@@ -185,10 +184,10 @@ add_trajectories_to_map <- function(map, data_filtered, type_palette) {
 create_vessel_popup <- function(vessel_info, traj) {
   popup_content <- paste(
     "<h2>Bateau:", vessel_info$VesselName, "</h2>Type:", vessel_info$VesselType,
-    "<br>Longueur (m):", round(vessel_info$Length, 2),
+    "Longueur (m):", round(vessel_info$Length, 2),
     "<br>Largeur (m):", round(vessel_info$Width, 2)
   )
-  
+
   if (vessel_info$is_cargo) {
     popup_content <- paste0(
       popup_content,
@@ -196,15 +195,18 @@ create_vessel_popup <- function(vessel_info, traj) {
       "<br>Statut de chargement:", vessel_info$loading_status
     )
   }
-  
+
   popup_content <- paste0(
     popup_content,
-    "<hr>Distance totale (km):", round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2), na.rm = TRUE) * 111, 2),
+    "<hr>Distance totale (km):",
+    round(sum(sqrt((diff(traj$LON))^2 + (diff(traj$LAT))^2),
+        na.rm = TRUE) * 111, 2),
     "<br>Vitesse moyenne (nœuds):", round(mean(traj$SOG, na.rm = TRUE), 2),
     "<br>Vitesse maximale (nœuds):", round(max(traj$SOG, na.rm = TRUE), 2),
-    "<br>Date de début:", min(traj$BaseDateTime), "<br>Date de fin:", max(traj$BaseDateTime)
+    "<br>Date de début:", min(traj$BaseDateTime), "<br>Date de fin:",
+    max(traj$BaseDateTime)
   )
-  
+
   return(popup_content)
 }
 
@@ -217,24 +219,23 @@ add_port_zones_to_map <- function(map, port_data) {
       data = port_data$clustered_zones,
       lng = ~mean_lon, lat = ~mean_lat,
       radius = ~sqrt(n_operations)*3,
-      color = ~ifelse(mean_draft_change < 0, "red", "blue"),
+      color = ~ifelse(mean_draft_change == 0, "#ffff86", 
+               ifelse(mean_draft_change < 0, "blue", "red")),
       fillOpacity = 0.7,
       stroke = TRUE,
       weight = 1,
       group = "Zones de port",
-      popup = ~paste(
-        "<h3>Zone portuaire confirmée</h3>",
-        "Nombre de bateaux:", n_vessels,
-        "<br>Opérations:", n_operations,
-        "<br>Activités:", activities,
-        "<br>Bateaux:", substr(vessels, 1, 100), "..."
+      popup = ~paste("<h3>", ifelse(mean_draft_change == 0, "Zone d'arrêt",
+        "Zone Portuaire"),"</h3>", "Nombre de bateaux:", n_vessels,
+        "<br>Opérations:", n_operations, "<br>Activités:", activities,
+        "<br>Bateaux:", substr(vessels, 1, 5), "..."
       )
     )
   
   if (nrow(port_data$port_zones_sf) > 0) {
     port_palette <- colorFactor(
-      palette = c("blue", "red", "darkblue", "darkred", "gray"), 
-      domain = c("Chargement", "Chargement majeur", "Déchargement", "Déchargement majeur", "Arrêt simple")
+      palette = c( "#ffff86", "blue", "red"), 
+      domain = c("Chargement", "Déchargement", "Arrêt simple")
     )
     
     map <- map %>%
@@ -245,10 +246,11 @@ add_port_zones_to_map <- function(map, port_data) {
         fillOpacity = 0.7,
         stroke = TRUE,
         weight = 1,
-        group = ~ifelse(grepl("Chargement", port_activity), "Chargement", "Déchargement"),
+        group = ~ifelse(grepl("Chargement", port_activity), "Chargement", 
+                ifelse(grepl("Déchargement", port_activity), "Déchargement", "Arrêt simple")),
         popup = ~paste(
           "<h3>Activité portuaire</h3>",
-          "<br>Bateau:", VesselName,
+          "Bateau:", VesselName,
           "<br>Type:", VesselType,
           "<br>Activité:", port_activity,
           "<br>Durée:", round(duration, 1), "heures",
@@ -275,8 +277,8 @@ add_map_legends <- function(map, vessel_types, port_zones_exist = FALSE) {
   if (port_zones_exist) {
     map <- map %>%
       addLegend(position = "topleft", 
-                colors = c("blue", "red"), 
-                labels = c("Déchargement ou Arrêt", "Chargement"),
+                colors = c("blue", "red", "#ffff86"), 
+                labels = c("Déchargement", "Chargement", "Arrêt simple"),
                 title = "Activités portuaires",
                 opacity = 0.7)
   }
@@ -304,11 +306,11 @@ create_interactive_map <- function(data, max_vessels = 142) {
     setView(lng = mean(data_filtered$LON, na.rm = TRUE), lat = mean(data_filtered$LAT, na.rm = TRUE), zoom = 6) %>%
     addLayersControl(
       overlayGroups = c("Tous les bateaux", vessel_types, "Cargos", "Chargé", 
-                       "Zones de port", "Chargement", "Déchargement", "Routes principales"),
+                       "Zones de port", "Chargement", "Déchargement", "Arrêt simple", "Routes principales"),
       options = layersControlOptions(collapsed = FALSE),
       position = "topright"
     ) %>%
-    hideGroup(c(vessel_types, "Cargos", "Chargé", "Chargement", "Déchargement"))
+    hideGroup(c(vessel_types, "Cargos", "Chargé", "Chargement", "Déchargement", "Arrêt simple", "Routes principales"))
   
   # Ajout des éléments à la carte
   map <- add_trajectories_to_map(map, data_filtered, type_palette)
@@ -329,7 +331,7 @@ load_and_prepare_data <- function(file_path) {
 # Fonction principale pour exécuter tout le processus
 main_interactive_map <- function() {
   print("Chargement des données...")
-  vessel_data <- load_and_prepare_data("data/vessel-cleaned.csv")
+  vessel_data <- load_and_prepare_data("data/export_IA.csv")
   
   print("Génération de la carte interactive...")
   interactive_map <- create_interactive_map(vessel_data)

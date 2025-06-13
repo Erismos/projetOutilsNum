@@ -10,7 +10,7 @@
 # Version    : 1.0
 # Auteurs    : Gabriel Boucneau & Laure Warlop & Clément Auvray
 # Date       : Juin 2025
-# Dépendances: scripts/data_cleaning.R, scripts/data_visualization.R, 
+# Dépendances: scripts/data_cleaning.R, scripts/data_visualization.R,   
 #              scripts/interactive_map.R
 ############################################################
 
@@ -18,13 +18,11 @@
 source("scripts/data_cleaning.R")
 source("scripts/data_visualization.R")
 source("scripts/interactive_map.R")
-source("scripts/statistical_analysis.R")
+# source("scripts/statistical_analysis.R")
 
 # exécuter les fonctions principales
-main_data_cleaning()
-generate_all_plots()
+# main_data_cleaning()
+# generate_all_plots()
 main_interactive_map()
-analysis_results <- main()
-print(analysis_results)
-
-
+# analysis_results <- main()
+# print(analysis_results)

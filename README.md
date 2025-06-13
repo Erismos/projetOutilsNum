@@ -89,5 +89,5 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 * Cartes des itinéraires (`outputs/interactive_map.html`)
 * Fichier CSV nettoyé pour export IA (`data/export_IA.csv`)
 * [Rapport d'interpretations](https://yncrea-my.sharepoint.com/:w:/g/personal/laure_warlop_isen-ouest_yncrea_fr/EebxoPbonphEktEg7kkJzAYBx9FXocOLJYg8FxU2RHDpFg?rtime=Yoh1lHaq3Ug)
-* [Gantt](https://yncrea-my.sharepoint.com/:x:/g/personal/gabriel_boucneau_isen-ouest_yncrea_fr/EeFyss4CFzFLqRMh9ZACRXUBCnqPZFdicaM9cvkcB_6CRw?e=efSeLb)
+* Gantt (`gantt_bigdata.pdf`)
 
