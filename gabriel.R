@@ -38,7 +38,7 @@ for (type in u_type) {
   med_cargo  <- sub_dt[Cargo  != 0, median(Cargo)]
   med_status  <- sub_dt[Status  != 0, median(Status)]
 
-  # Remplacement des 0 par les moyennes
+  # Remplacement des 0 par les médianes
   sub_dt[Length == 0, Length := med_length]
   sub_dt[Width  == 0, Width  := med_width]
   sub_dt[Draft  == 0, Draft  := med_draft]
@@ -108,7 +108,7 @@ cross_table <- table(vessel_final[1:33]$Cargo, vessel_final[1:33]$VesselType)
 chisq.test(cross_table)
 # p-value > 0.05 -> pas de preuve qu'elles sont dépendantes
 
-# Tableau croisé VesselType × TranceiverClass
+# Tableau croisé VesselType × Cargo
 
 # Test du Chi² (indépendance)
 # calcul de x² : sum((Oij - Eij)²/Eij), p-value : 
@@ -169,7 +169,7 @@ print(conf_mat)
 
 # train/test split : 
 
-# 0.8561944 T class, SOG > 0.96 replaced by med of group, 0.8669777 Tclass sog > 0.96 removed, 0.8976656  w/ NA -> mean, SOG, L, W, D, Cargo, TClasse, Status, SOG > q0.96 removed
+# 0.8561944 T class, SOG > 0.96 replaced by med of group, 0.8669777 Tclass sog > 0.96 removed, 0.8976656  w/o NA -> mean, SOG, L, W, D, Cargo, TClasse, Status, SOG > q0.96 removed
 
 # med : q > 0.96 default
 # factor(TClass), Status                                 : 0.884735
@@ -177,7 +177,7 @@ print(conf_mat)
 # TClass, Status, SOG Filtered                           : 0.8857681
 # TClass, factor(Status), SOG Filtered                   : 0.8857681
 # TClass, Status                                         : 0.8857681
-# TClass, Status, SOG removed q>0.94                     : 0.9057053 
+# TClass, Status, SOG removed q>0.94                     : 0.9057053
 # f(TClass, Status), SOG removed q>0.94                  : 0.84019
 # f(TClass), Status, SOG removed q>0.94                  : 0.8376588
 # TClass, Status, SOG removed q>0.94, NA/0 Status->med   : 0.9304349 #
@@ -185,8 +185,8 @@ print(conf_mat)
 
 # mean : q > 0.96 default
 # factor(TClass, Status)                                 : 0.8208954
-# mean high SOG, factor(TClass, Status)                  : 0.7918233
-# mean high SOG, TClass, Status                          : 0.8682674
+# high SOG, factor(TClass, Status)                       : 0.7918233
+# high SOG, TClass, Status                               : 0.8682674
 # TClass, Status, high SOG filtered                      : 0.8745645
 # no filter, no factor, high SOG meaned                  : 0.8667761
 # no factor, high SOG removed                            : 0.8745645
