@@ -51,6 +51,8 @@ for (type in u_type) {
   vessel_final2 <- rbind(vessel_final2, sub_dt)
 }
 
+vessel_filtered <- vessel_final2[vessel_final2$SOG <= sog_threshold, ]
+
 # remplacer NA par inconnu(e) dans colonne texte (qualitative)
 for (col in names(vessel)) {
   if (is.character(vessel[[col]])) {
@@ -71,14 +73,14 @@ for (col in names(vessel)) {
 #dev.off()
 #################
 
-num_vars <- c("VesselType","SOG", "Length", "Width", "Draft", "Cargo")
+num_vars <- c("SOG", "Length", "Width", "Draft", "Cargo")
 
 # Conversion de VesselType en facteur
-vessel_final2$VesselType <- as.factor(vessel_final2$VesselType)
+vessel_filtered$VesselType <- as.factor(vessel_filtered$VesselType)
 
 # Boucle pour tracer un boxplot par variable
 for (var in num_vars) {
-  p <- ggplot(vessel_final2, aes_string(x = "VesselType", y = var)) +
+  p <- ggplot(vessel_filtered, aes_string(x = "VesselType", y = var)) +
     geom_boxplot(fill = "skyblue", outlier.colour = "red", outlier.shape = 1) +
     labs(title = paste("Boîte à moustaches de", var, "par type de navire"),
          x = "VesselType", y = var) +
@@ -86,6 +88,8 @@ for (var in num_vars) {
   print(p)
   ggsave(filename = paste0("plots/4_boxplot_", var, ".png"), plot = p, width = 8, height = 5)
 }
+
+num_vars <- c("VesselType","SOG", "Length", "Width", "Draft", "Cargo")
 
 # Matrice de correlation entre SOG, Length, Width, Draft et Cargo
 cor_matrix <- cor(vessel_final[, ..num_vars], use = "complete.obs")
