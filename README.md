@@ -24,10 +24,10 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 
 ```
 .
-├── data/                      # Données brutes et nettoyées
-│   ├── vessel-total-clean.csv
-│   └── export_IA.csv
-├── plots/                    # Graphiques statiques générés (PNG)
+├── data/                      
+│   ├── vessel-total-clean.csv # Données brutes
+│   └── export_IA.csv          # Données nettoyées
+├── plots/                     # Graphiques générés (PNG)
 │   └── ...
 ├── outputs/
 │   └── interactive_map.html
@@ -35,10 +35,10 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 │   ├── main.R             # Script principal R
 │   ├── data_cleaning.R
 │   ├── data_visualization.R
-│   ├──
+│   ├── Gabirel.R
 │   └── interactive_map.R
 ├── subjects/
-│   └── ...   # PDF des sujets
+│   └── ...   # PDFs des sujets
 └── README.md
 ```
 
