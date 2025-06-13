@@ -32,96 +32,142 @@ library(plotly)
 library(cluster)
 library(dbscan)
 library(htmlwidgets)
+library(corrplot)
+library(randomForest)
+library(caret)
+library(reshape2)
+
 
 ####################################################
-# Nettoyage et traintement des données #
+# Fonctionnalité 1: Nettoyage et traintement des données #
 ####################################################
 print("Fonctionnalité 1: Nettoyage et traitement des données de trafic maritime")
 
-# Lire le fichier CSV
-data <- read.csv("data/vessel-total-clean.csv")
-print(dim(data))
+# Fonction pour lire les données
+read_data <- function(file_path) {
+  data <- read.csv(file_path)
+  print(paste("Dimensions initiales des données :", dim(data)[1], "lignes x", dim(data)[2], "colonnes"))
+  return(data)
+}
 
-# Statistiques descriptives univariées
-print(summary(data))
-print(names(data))
-str(data)
+# Fonction pour afficher les statistiques descriptives
+display_basic_stats <- function(data) {
+  print("Statistiques descriptives :")
+  print(summary(data))
+  print("Noms des colonnes :")
+  print(names(data))
+  print("Structure des données :")
+  str(data)
+}
 
-# Conversion des colonnes quantitatives en numérique
-data$LAT <- as.numeric(data$LAT)
-data$LON <- as.numeric(data$LON)
-data$SOG <- as.numeric(data$SOG)
-data$COG <- as.numeric(data$COG)
-data$Heading <- as.numeric(data$Heading)
-data$Length <- as.numeric(data$Length)
-data$Width <- as.numeric(data$Width)
-data$Draft <- as.numeric(data$Draft)
+# Fonction pour convertir les colonnes en numérique
+convert_to_numeric <- function(data, columns) {
+  for(col in columns) {
+    data[[col]] <- as.numeric(data[[col]])
+  }
+  return(data)
+}
 
-# Définir les colonnes numériques qui peuvent prendre la médiane
-colonnes_numeriques <- c("SOG", "COG", "Heading", "Length", "Width", "Draft")
-
-# Traitement des valeurs manquantes
-print("Valeurs manquantes :")
-data[data == "\\N"] <- NA
-print(sum(is.na(data)))
-
-n <- nrow(data)
-for (i in colnames(data)) {
-    val_mq <- sum(is.na(data[[i]]))
+# Fonction pour traiter les valeurs manquantes
+handle_missing_values <- function(data, numeric_columns) {
+  print("Traitement des valeurs manquantes...")
+  data[data == "\\N"] <- NA
+  print(paste("Total de valeurs manquantes :", sum(is.na(data))))
+  
+  n <- nrow(data)
+  for (col in colnames(data)) {
+    val_mq <- sum(is.na(data[[col]]))
     pourcentage <- val_mq/n
     
     if(pourcentage < 0.05) {
-        data <- data[!is.na(data[[i]]), ]
-        n <- nrow(data)
+      data <- data[!is.na(data[[col]]), ]
+      n <- nrow(data)
     } else {
-        if(i %in% colonnes_numeriques) {
-            med <- median(data[[i]], na.rm = TRUE)
-            data[[i]][is.na(data[[i]])] <- med
-        } else {
-            data[[i]][is.na(data[[i]])] <- "inconnu"
-        }
+      if(col %in% numeric_columns) {
+        med <- median(data[[col]], na.rm = TRUE)
+        data[[col]][is.na(data[[col]])] <- med
+      } else {
+        data[[col]][is.na(data[[col]])] <- "inconnu"
+      }
     }
+  }
+  
+  print(paste("Dimensions après traitement des NA :", dim(data)[1], "lignes x", dim(data)[2], "colonnes"))
+  return(data)
 }
 
-print("Nombre de lignes et colonnes après traitement des NA :")
-print(dim(data))
-
-# Traitement des valeurs aberrantes
-print("Valeurs aberrantes")
-for(i in colonnes_numeriques) {
-    q1 <- quantile(data[[i]], 0.25)
-    q3 <- quantile(data[[i]], 0.75)
+# Fonction pour traiter les valeurs aberrantes
+handle_outliers <- function(data, numeric_columns) {
+  print("Traitement des valeurs aberrantes...")
+  
+  for(col in numeric_columns) {
+    q1 <- quantile(data[[col]], 0.25)
+    q3 <- quantile(data[[col]], 0.75)
     iqr <- q3 - q1
     inf <- q1 - 1.5 * iqr
     sup <- q3 + 1.5 * iqr
     
-    outliers <- data[[i]] < inf | data[[i]] > sup
+    outliers <- data[[col]] < inf | data[[col]] > sup
     
     if(sum(outliers, na.rm = TRUE) / nrow(data) < 0.03) {
-        data <- data[!outliers, ]
+      data <- data[!outliers, ]
     } else {
-        data[[i]][outliers] <- median(data[[i]], na.rm = TRUE)
+      data[[col]][outliers] <- median(data[[col]], na.rm = TRUE)
     }
+  }
+  
+  print(paste("Dimensions après traitement des valeurs aberrantes :", dim(data)[1], "lignes x", dim(data)[2], "colonnes"))
+  return(data)
 }
 
-print("Nombre de lignes et colonnes après traitement des valeurs aberrantes :")
-print(dim(data))
+# Fonction pour traiter les doublons
+handle_duplicates <- function(data) {
+  print("Traitement des doublons...")
+  print(paste("Nombre de doublons trouvés :", sum(duplicated(data))))
+  data <- unique(data)
+  print(paste("Dimensions finales :", dim(data)[1], "lignes x", dim(data)[2], "colonnes"))
+  return(data)
+}
 
-# Traitement des doublons
-print("Nombre de doublons :")
-print(sum(duplicated(data)))
-data <- unique(data)
+# Fonction pour sauvegarder les données nettoyées
+save_clean_data <- function(data, file_path) {
+  write.csv(data, file_path, row.names = FALSE)
+  print(paste("Nettoyage des données terminé. Données sauvegardées sous :", file_path))
+}
 
-print("Nombre final de lignes et colonnes :")
-print(dim(data))
+# Définition des colonnes numériques
+numeric_columns <- c("SOG", "COG", "Heading", "Length", "Width", "Draft")
 
-# Sauvegarder les données nettoyées
-write.csv(data, "data/vessel-cleaned.csv", row.names = FALSE)
-print("Data cleaning complete. Cleaned data saved to 'data/vessel-cleaned.csv'.")
+# Pipeline principal de nettoyage des données
+main_data_cleaning <- function() {
+  # Étape 1: Lecture des données
+  data <- read_data("data/vessel-total-clean.csv")
+  
+  # Étape 2: Affichage des statistiques de base
+  display_basic_stats(data)
+  
+  # Étape 3: Conversion des colonnes numériques
+  data <- convert_to_numeric(data, c("LAT", "LON", numeric_columns))
+  
+  # Étape 4: Traitement des valeurs manquantes
+  data <- handle_missing_values(data, numeric_columns)
+  
+  # Étape 5: Traitement des valeurs aberrantes
+  data <- handle_outliers(data, numeric_columns)
+  
+  # Étape 6: Traitement des doublons
+  data <- handle_duplicates(data)
+  
+  # Étape 7: Sauvegarde des données nettoyées
+  save_clean_data(data, "data/vessel-cleaned.csv")
+}
+
+# Exécution du pipeline
+main_data_cleaning()
 
 
 ####################################################
-# Graphiques optimisés pour l'analyse des données de bateaux #
+# Fonctionnalité 2: Graphiques optimisés pour l'analyse des données de bateaux #
 ####################################################
 
 print("Fonctionnalité 2: Graphiques pour l'analyse des données de bateaux")
@@ -186,7 +232,7 @@ ggplot(vessel_type_counts, aes(x = reorder(as.factor(VesselType), n), y = n)) +
        y = "Nombre de bateaux") +
   theme_marine +
   theme(axis.text.x = element_text(angle = 0))
-ggsave("plots/vessel_type_distribution_enhanced.png", width = 12, height = 8, dpi = 300)
+ggsave("plots/vessel_type_distribution.png", width = 12, height = 8, dpi = 300)
 
 
 # RELATION LONGUEUR/LARGEUR PAR TYPE
@@ -209,7 +255,7 @@ ggplot(length_width_clean, aes(x = Length_num, y = Width_num, color = as.factor(
   theme_marine +
   theme(legend.position = "right") +
   facet_wrap(~VesselType, scales = "free", ncol = 3)
-ggsave("plots/length_vs_width_by_type_enhanced.png", width = 15, height = 12, dpi = 300)
+ggsave("plots/length_vs_width_by_type.png", width = 15, height = 12, dpi = 300)
 
 # RÉSUMÉ STATISTIQUE VISUEL
 summary_stats <- data %>%
@@ -238,7 +284,7 @@ print("Résolution: 300 DPI pour impression haute qualité")
 
 
 ####################################################
-# Carte interactive #
+# Fonctionnalité 3: Carte interactive #
 ####################################################
 
 # Carte interactive Leaflet
@@ -504,3 +550,85 @@ interactive_map <- create_interactive_map(vessel_data)
 saveWidget(interactive_map, "outputs/interactive_map.html", selfcontained = TRUE)
 
 print("Terminé.")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# hist_vitesses <- ggplot(data, aes(x = SOG)) +
+#   geom_histogram(bins = 30, fill = "lightblue", color = "darkblue", alpha = 0.7) +
+#   # légende
+#   labs(title = "Distribution des vitesses (SOG)",
+#        x = "Vitesse sur le fond (nœuds)", y = "Fréquence") +
+#   geom_vline(aes(xintercept = mean(SOG, na.rm = TRUE)), # on ajoute une ligne verticale pointillée rouge à la moyenne des vitesses
+#              color = "red", linetype = "dashed", size = 1) +
+#     # on ajoute une annotation texte près de la ligne moyenne, avec la valeur moyenne arrondie à 1 décimale
+#   annotate("text", x = mean(data$SOG, na.rm = TRUE) + 2, 
+#            y = max(table(cut(data$SOG, 30))) * 0.8,
+#            label = paste("Moyenne:", round(mean(data$SOG, na.rm = TRUE), 1), "nœuds"),
+#            color = "red")
+
+# ggsave("histogramme_vitesses.png", hist_vitesses, 
+#        width = 10, height = 6, dpi = 300, bg = "white")
+
+# statuts_count <- table(data$Status) # calcul le nombre d'occurence de chaque status
+# # créer un dataframe avec les status et leurs comptes
+# statuts_data <- data.frame( 
+#   Status = names(statuts_count),
+#   n = as.numeric(statuts_count),
+#   stringsAsFactors = FALSE
+# )
+# # on calcul les pourcentages pour chaque status
+# statuts_data$pourcentage <- statuts_data$n / sum(statuts_data$n) * 100
+
+# # Graphique en secteurs (camemberts)
+# # on initialise un graphique vide pour faire un camembert 
+# statuts_pie <- ggplot(statuts_data, aes(x = "", y = n, fill = Status)) +
+#     # on ajoute une barre pleine pour chaque status
+#   geom_bar(stat = "identity", width = 1) +
+#   # on convertit les barres en graphiques circulaires
+#   coord_polar("y", start = 0) +
+#   # ajout du titre
+#   labs(title = "Répartition des statuts des navires") +
+#   # on supprime tous les axes
+#   theme_void() +
+#   # on ajoute le pourcentage à l'intérieur du graphique
+#   geom_text(aes(label = paste0(round(pourcentage, 1), "%")), 
+#             position = position_stack(vjust = 0.5),
+#             size = 3) +
+#     # on met la légende à droite et on change la taille du texte
+#   theme(legend.position = "right",
+#         legend.text = element_text(size = 8))
+# # on suavegarde le graphique en une image de format png
+# ggsave("repartition_statuts.png", statuts_pie, 
+#        width = 12, height = 8, dpi = 300, bg = "white")
+
+# # Version avec contours uniquement 
+# # on affiche les points des navires en bleu acier
+# heatmap_contours <- ggplot(data, aes(x = LON, y = LAT)) +
+#   geom_point(alpha = 0.4, size = 0.5, color = "steelblue") +
+#   # on superpose les lignes de niveau de densité (contours rouges)
+#   stat_density_2d(color = "red", size = 0.8, bins = 10) +
+#   # légende
+#   labs(title = "Carte de densité avec contours",
+#        subtitle = "Lignes de niveau de concentration des navires",
+#        x = "Longitude", y = "Latitude") +
+#   theme_minimal()
+# # sauvegarde
+# ggsave("heatmap_contours.png", heatmap_contours, 
+#        width = 12, height = 8, dpi = 300, bg = "white")
