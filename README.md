@@ -36,8 +36,9 @@ Cette première partie se concentre sur le **traitement de données massives**, 
 2. **Installer les dépendances R** :
    ```r
    # Dans RStudio ou R CLI :
-   install.packages(c("dplyr", "ggplot2", "leaflet", "caret", "randomForest", "corrplot", "plotly"))
+   install.packages(c("readr", "dplyr", "ggplot2", "cowplot", "lubridate", "viridis", "RColorBrewer", "maps", "mapdata", "ggmap", "sf", "leaflet", "plotly", "cluster", "dbscan", "htmlwidgets", "corrplot", "randomForest", "caret", "reshape2"))
    ```
+   
 
 3. **Exécuter l'analyse - Lancer le script principal** :
      ```r
