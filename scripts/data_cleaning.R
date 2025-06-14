@@ -12,21 +12,26 @@
 # Sorties     : Fichier nettoyé au format CSV : data/export_IA.csv
 ############################################################
 
-
-
 ####################################################
-# Fonctionnalité 1: Nettoyage et traintement des données #
+# Fonctionnalité 1: Nettoyage et traitement des données #
 ####################################################
 
-
-# Fonction pour lire les données
+#' Lit les données à partir d'un fichier CSV
+#'
+#' @param file_path Chemin vers le fichier CSV à lire
+#' @return DataFrame contenant les données lues
+#' @examples 
+#' data <- read_data("data/vessel-total-clean.csv")
 read_data <- function(file_path) {
   data <- read.csv(file_path)
   print(paste("Dimensions initiales des données :", dim(data)[1], "lignes x", dim(data)[2], "colonnes"))
   return(data)
 }
 
-# Fonction pour afficher les statistiques descriptives
+#' Affiche les statistiques descriptives de base des données
+#'
+#' @param data DataFrame à analyser
+#' @return Aucun (affichage dans la console uniquement)
 display_basic_stats <- function(data) {
   print("Statistiques descriptives :")
   print(summary(data))
@@ -36,7 +41,11 @@ display_basic_stats <- function(data) {
   str(data)
 }
 
-# Fonction pour convertir les colonnes en numérique
+#' Convertit des colonnes en type numérique
+#'
+#' @param data DataFrame contenant les données
+#' @param columns Vecteur des noms de colonnes à convertir
+#' @return DataFrame avec les colonnes converties en numérique
 convert_to_numeric <- function(data, columns) {
   for(col in columns) {
     data[[col]] <- as.numeric(data[[col]])
@@ -44,9 +53,18 @@ convert_to_numeric <- function(data, columns) {
   return(data)
 }
 
-# Fonction pour traiter les valeurs manquantes
+#' Traite les valeurs manquantes selon différentes stratégies
+#'
+#' @param data DataFrame à nettoyer
+#' @param numeric_columns Vecteur des noms de colonnes numériques
+#' @return DataFrame nettoyé
+#' @details Stratégies appliquées :
+#'          - Suppression si <5% de valeurs manquantes
+#'          - Imputation par médiane pour les numériques
+#'          - Remplacement par "inconnu" pour les autres
 handle_missing_values <- function(data, numeric_columns) {
   print("Traitement des valeurs manquantes...")
+  # Conversion des valeurs "\N" en NA
   data[data == "\\N"] <- NA
   print(paste("Total de valeurs manquantes :", sum(is.na(data))))
   
@@ -56,13 +74,16 @@ handle_missing_values <- function(data, numeric_columns) {
     pourcentage <- val_mq/n
     
     if(pourcentage < 0.05) {
+      # Suppression des lignes avec NA si peu de valeurs manquantes
       data <- data[!is.na(data[[col]]), ]
       n <- nrow(data)
     } else {
       if(col %in% numeric_columns) {
+        # Imputation par la médiane pour les colonnes numériques
         med <- median(data[[col]], na.rm = TRUE)
         data[[col]][is.na(data[[col]])] <- med
       } else {
+        # Remplacement par "inconnu" pour les autres colonnes
         data[[col]][is.na(data[[col]])] <- "inconnu"
       }
     }
@@ -72,22 +93,34 @@ handle_missing_values <- function(data, numeric_columns) {
   return(data)
 }
 
-# Fonction pour traiter les valeurs aberrantes
+#' Détecte et traite les valeurs aberrantes (outliers)
+#'
+#' @param data DataFrame à nettoyer
+#' @param numeric_columns Vecteur des noms de colonnes numériques
+#' @return DataFrame nettoyé
+#' @details Utilise la méthode de l'IQR (Interquartile Range) :
+#'          - Suppression si <3% d'outliers
+#'          - Imputation par médiane sinon
 handle_outliers <- function(data, numeric_columns) {
   print("Traitement des valeurs aberrantes...")
   
   for(col in numeric_columns) {
+    # Calcul des quartiles et de l'IQR
     q1 <- quantile(data[[col]], 0.25)
     q3 <- quantile(data[[col]], 0.75)
     iqr <- q3 - q1
+    # Définition des bornes
     inf <- q1 - 1.5 * iqr
     sup <- q3 + 1.5 * iqr
     
+    # Détection des outliers
     outliers <- data[[col]] < inf | data[[col]] > sup
     
     if(sum(outliers, na.rm = TRUE) / nrow(data) < 0.03) {
+      # Suppression si peu d'outliers
       data <- data[!outliers, ]
     } else {
+      # Imputation par la médiane sinon
       data[[col]][outliers] <- median(data[[col]], na.rm = TRUE)
     }
   }
@@ -96,7 +129,10 @@ handle_outliers <- function(data, numeric_columns) {
   return(data)
 }
 
-# Fonction pour traiter les doublons
+#' Supprime les doublons dans les données
+#'
+#' @param data DataFrame à nettoyer
+#' @return DataFrame sans doublons
 handle_duplicates <- function(data) {
   print("Traitement des doublons...")
   print(paste("Nombre de doublons trouvés :", sum(duplicated(data))))
@@ -105,16 +141,29 @@ handle_duplicates <- function(data) {
   return(data)
 }
 
-# Fonction pour sauvegarder les données nettoyées
+#' Sauvegarde les données nettoyées dans un fichier CSV
+#'
+#' @param data DataFrame à sauvegarder
+#' @param file_path Chemin du fichier de sortie
+#' @return Aucun (écriture du fichier uniquement)
 save_clean_data <- function(data, file_path) {
   write.csv(data, file_path, row.names = FALSE)
   print(paste("Nettoyage des données terminé. Données sauvegardées sous :", file_path))
 }
 
-# Définition des colonnes numériques
+# Définition des colonnes numériques pour le traitement
 numeric_columns <- c("SOG", "COG", "Heading", "Length", "Width", "Draft")
 
-# Pipeline principal de nettoyage des données
+#' Pipeline principal de nettoyage des données
+#' 
+#' Exécute toutes les étapes du processus de nettoyage :
+#' 1. Lecture des données
+#' 2. Affichage des statistiques
+#' 3. Conversion des colonnes numériques
+#' 4. Traitement des valeurs manquantes
+#' 5. Traitement des valeurs aberrantes
+#' 6. Suppression des doublons
+#' 7. Sauvegarde des données nettoyées
 main_data_cleaning <- function() {
   # Étape 1: Lecture des données
   data <- read_data("data/vessel-total-clean.csv")
@@ -138,5 +187,5 @@ main_data_cleaning <- function() {
   save_clean_data(data, "data/export_IA.csv")
 }
 
-# Exécution du pipeline
+# Exécution du pipeline (décommenter pour lancer)
 # main_data_cleaning()

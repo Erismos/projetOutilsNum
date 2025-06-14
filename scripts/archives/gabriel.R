@@ -12,7 +12,7 @@ library(reshape2)
 
 # \N remplacer par NA
 vessel = data.table::fread("data/vessel-total-clean.csv", na.strings = "\\N")
-vessel_final = data.table::fread("data/vessel-cleaned.csv", na.strings = "\\N")
+vessel_final = data.table::fread("data/export_IA.csv", na.strings = "\\N")
 vessel_final2 = data.table::data.table()
 
 # supp duplicate
