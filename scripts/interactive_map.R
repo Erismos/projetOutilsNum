@@ -273,8 +273,7 @@ add_port_zones_to_map <- function(map, port_data) {
       stroke = TRUE,
       weight = 1,
       group = "Zones de port",
-      popup = ~paste("<h3>", ifelse(mean_draft_change == 0, "Zone d'arrêt",
-        "Zone Portuaire"),"</h3>", "Nombre de bateaux:", n_vessels,
+      popup = ~paste("<h3>Zone Portuaire</h3>", "Nombre de bateaux:", n_vessels,
         "<br>Opérations:", n_operations, "<br>Activités:", activities,
         "<br>Bateaux:", substr(vessels, 1, 5), "..."
       )

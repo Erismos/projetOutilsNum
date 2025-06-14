@@ -50,23 +50,6 @@ load_and_prepare_data <- function(file_path) {
   return(data)
 }
 
-#' Crée un thème ggplot2 personnalisé pour les visualisations maritimes
-#'
-#' @return Un objet theme ggplot2 avec des paramètres prédéfinis pour :
-#'         - Titres centrés et stylisés
-#'         - Légendes et axes formatés
-#'         - Arrière-plan blanc
-get_marine_theme <- function() {
-  theme_minimal() +
-    theme(
-      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
-      plot.subtitle = element_text(size = 11, hjust = 0.5, color = "gray60"),
-      axis.title = element_text(size = 12),
-      legend.title = element_text(size = 11, face = "bold"),
-      panel.grid.minor = element_blank(),  # Suppression des grilles mineures
-      plot.background = element_rect(fill = "white", color = NA)  # Fond blanc
-    )
-}
 
 #' Crée un diagramme polaire pour visualiser des données angulaires
 #'
@@ -92,11 +75,10 @@ create_polar_plot <- function(data, var, title, color) {
 #' Crée un graphique de répartition des navires par type
 #'
 #' @param data DataFrame contenant les données AIS
-#' @param theme Thème ggplot2 à appliquer
 #' @return Un graphique ggplot en barres horizontales montrant :
 #'         - Le nombre de navires par type
 #'         - Le pourcentage de chaque type
-plot_vessel_type_distribution <- function(data, theme) {
+plot_vessel_type_distribution <- function(data) {
   # On garde un seul enregistrement par bateau (en utilisant MMSI comme identifiant unique)
   unique_vessels <- data %>%
     group_by(MMSI) %>%
@@ -120,7 +102,7 @@ plot_vessel_type_distribution <- function(data, theme) {
          subtitle = paste("Nombre unique de bateaux :", nrow(unique_vessels)),
          x = "Type de bateau (code numérique)",
          y = "Nombre de bateaux") +
-    theme +
+    theme_light() +
     theme(axis.text.x = element_text(angle = 0),
           plot.subtitle = element_text(color = "gray40"))
 }
@@ -128,12 +110,11 @@ plot_vessel_type_distribution <- function(data, theme) {
 #' Crée un graphique de corrélation longueur/largeur par type de navire
 #'
 #' @param data DataFrame contenant les données AIS
-#' @param theme Thème ggplot2 à appliquer
 #' @return Un graphique ggplot avec :
 #'         - Nuage de points longueur/largeur
 #'         - Tendance linéaire par type de navire
 #'         - Facettes par type de navire
-plot_length_width <- function(data, theme) {
+plot_length_width <- function(data) {
   # Nettoyage des données
   length_width_clean <- data %>%
     filter(!is.na(Length) & !is.na(Width) & 
@@ -151,7 +132,7 @@ plot_length_width <- function(data, theme) {
          subtitle = "Corrélation par type de navire avec tendances",
          x = "Longueur (mètres)",
          y = "Largeur (mètres)") +
-    theme +
+    theme_light() +
     theme(legend.position = "right") +
     facet_wrap(~VesselType, scales = "free", ncol = 3)  # Sous-graphiques par type
 }
@@ -233,9 +214,6 @@ generate_all_plots <- function() {
   print("Chargement des données...")
   data <- load_and_prepare_data("data/export_IA.csv")
   
-  # Récupération du thème
-  marine_theme <- get_marine_theme()
-  
   print("Génération des graphiques...")
   # Création des graphiques polaires combinés (COG et Heading)
   p1 <- create_polar_plot(data, COG, "Distribution des directions (COG)", "#4e79a7")
@@ -245,12 +223,12 @@ generate_all_plots <- function() {
   print("Graphique 1/6 : Graphiques polaires (COG et Heading) générés.")
 
   # Graphique de répartition par type
-  vessel_type_plot <- plot_vessel_type_distribution(data, marine_theme)
+  vessel_type_plot <- plot_vessel_type_distribution(data)
   ggsave("plots/vessel_type_distribution.png", vessel_type_plot, width = 12, height = 8, dpi = 300)
   print("Graphique 2/6 : Répartition par type de bateau générée.")
 
   # Graphique longueur/largeur
-  length_width_plot <- plot_length_width(data, marine_theme)
+  length_width_plot <- plot_length_width(data)
   ggsave("plots/length_vs_width_by_type.png", length_width_plot, width = 15, height = 12, dpi = 300)
   print("Graphique 3/6 : Relation longueur/largeur des bateaux générée.")
   
