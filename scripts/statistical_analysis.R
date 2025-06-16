@@ -112,9 +112,9 @@ for (var in num_vars) {
   ggsave(filename = paste0("plots/4_boxplot_", var, ".png"), plot = p, width = 8, height = 5)
 }
 
-num_vars <- c("VesselType","SOG", "Length", "Width", "Draft", "Cargo")
+num_vars <- c("SOG", "Length", "Width", "Draft", "Cargo")
 
-# Matrice de correlation entre VesselType, SOG, Length, Width, Draft et Cargo
+# Matrice de correlation entre SOG, Length, Width et Draft
 cor_matrix <- cor(vessel_final[, ..num_vars], use = "complete.obs")
 
 data <- as.data.frame(vessel_final)
@@ -126,7 +126,7 @@ cor_matrix <- cor(vessel_num, use = "complete.obs")
 r2_matrix <- cor_matrix^2
 
 # Visualisation
-png("plots/4_vtslwdc_cor_matrix.png", width = 800, height = 800)
+png("plots/4_slwdc_cor_matrix.png", width = 800, height = 800)
 corrplot(r2_matrix, 
          method = "color", 
          type = "upper", 
@@ -148,6 +148,12 @@ chisq.test(cross_table)
 # Test du Chi² (indépendance)
 # calcul de x² : sum((Oij - Eij)²/Eij), p-value : 
 # Oij nb de bateaux i ayant statut i par ex 
+
+# ANOVA
+
+data_anova <- vessel_final[1:100]
+anova_result <- aov(SOG ~ as.factor(VesselType), data = data_anova)
+summary(anova_result)
 
 # Visualisation (Mosaic Plot)
 
