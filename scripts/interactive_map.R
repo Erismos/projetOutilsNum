@@ -73,7 +73,6 @@ prepare_vessel_data <- function(data, max_vessels = 142) {
   # Filtrage et enrichissement des données
   data_filtered <- data %>%
     filter(VesselName %in% vessels_to_plot) %>%
-    mutate(VesselType = ifelse(is.na(VesselType), "Inconnu", as.character(VesselType))) %>%
     group_by(VesselName) %>%
     mutate(
       is_cargo = between(as.numeric(VesselType), 70, 89),  # Identification des cargos
