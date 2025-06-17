@@ -6,6 +6,7 @@ import joblib
 import os
 import matplotlib as mpl
 import seaborn as sns
+import pickle
 
 from xgboost import XGBClassifier
 
@@ -29,7 +30,7 @@ import joblib
 
 data = pd.read_csv("export_IA.csv")
 
-features = ["SOG", "Width", "Draft", "Status"]
+features = ["SOG", "Length", "Width", "Status", "Cargo"]
 target = "VesselType"
 
 x = data[features]
@@ -41,7 +42,7 @@ y_encoded = label_encoder.fit_transform(y)
 
 x_train, x_test, y_train, y_test = train_test_split(x, y_encoded, test_size=0.2, random_state = 42)
 
-numeric = ["SOG", "Width", "Draft"]
+numeric = ["SOG", "Length", "Width"]
 numeric_transformer = Pipeline(steps=[('scaler', StandardScaler())])
 
 preprocessor = ColumnTransformer(
@@ -49,6 +50,8 @@ preprocessor = ColumnTransformer(
         ('num', numeric_transformer, numeric)
     ]
 )
+
+preprocessor.fit(x_train)
 
 joblib.dump(preprocessor, "processor.joblib")
 
@@ -59,17 +62,18 @@ models = {
         'model': RandomForestClassifier(random_state=42),
         'params': {
             'classifier__n_estimators': [100, 200],
-            'classifier__max_depth': [None, 10, 20]
+            'classifier__max_depth': [None, 10, 20],
+            'classifier__class_weight' : ['balanced', None]
         }
     },
-    'XGBoost': {
-        'model': XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42),
-        'params': {
-            'classifier__n_estimators': [100, 200],
-            'classifier__learning_rate': [0.01, 0.1],
-            'classifier__max_depth': [3, 6]
-        }
-    },
+    #'XGBoost': {
+    #    'model': XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42),
+    #    'params': {
+    #        'classifier__n_estimators': [100, 200],
+    #        'classifier__learning_rate': [0.01, 0.1],
+    #        'classifier__max_depth': [3, 6]
+    #    }
+    #},
     #'SVM': {
     #    'model': SVC(random_state=42),
     #    'params': {
@@ -77,37 +81,24 @@ models = {
     #        'classifier__kernel': ['linear', 'rbf']
     #    }
     #},
-    'LogisticRegression': {
-        'model': LogisticRegression(random_state=42),
-        'params': {
-            'classifier__C': [0.1, 1, 10],
-            'classifier__penalty': ['l2']
-        }
-    },
-    'KNN': {
-        'model': KNeighborsClassifier(),
-        'params': {
-            'classifier__n_neighbors': [3, 5, 7]
-        }
-    }
+    #'LogisticRegression': {
+    #    'model': LogisticRegression(random_state=42),
+    #    'params': {
+    #        'classifier__C': [0.1, 1, 10],
+    #        'classifier__penalty': ['l2']
+    #    }
+    #},
+    #'KNN': {
+    #    'model': KNeighborsClassifier(),
+    #    'params': {
+    #        'classifier__n_neighbors': [3, 5, 7]
+    #    }
+    #}
 }
 
 results = []
 best_model_object = None
 best_accuracy = 0
-
-import dpctl
-try:
-    # Nouvelle méthode (versions récentes de dpctl)
-    gpu_devices = [d for d in dpctl.get_devices() if d.is_gpu]
-    print(f"GPU Intel détectés: {len(gpu_devices)}")
-    for device in gpu_devices:
-        print(f"- {device.name}")
-except AttributeError:
-    # Méthode de repli
-    print("dpctl version ancienne - utilisez 'pip install --upgrade dpctl'")
-    print("Devices disponibles:", dpctl.get_num_devices(device_type='gpu'))
-
 
 for name, config in models.items():
     print(f"\n=== Entraînement du modèle {name} ===")
@@ -132,7 +123,10 @@ for name, config in models.items():
     
     # Évaluation
     y_pred = grid.predict(x_test)
-    test_accuracy = accuracy_score(y_test, y_pred)
+    y_test_original = label_encoder.inverse_transform(y_test)
+    y_pred_original = label_encoder.inverse_transform(y_pred)
+
+    test_accuracy = accuracy_score(y_test_original, y_pred_original)
     
     # Sauvegarde des résultats
     results.append({
@@ -152,12 +146,12 @@ for name, config in models.items():
     print(f"Meilleurs paramètres: {grid.best_params_}")
     print(f"Accuracy (train): {grid.best_score_:.4f}")
     print(f"Accuracy (test): {test_accuracy:.4f}")
-    print("Rapport de classification:\n", classification_report(y_test, y_pred))
+    print("Rapport de classification (labels originaux):\n", classification_report(y_test_original, y_pred_original))
     
     # Matrice de confusion
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(6,6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    cm = confusion_matrix(y_test_original, y_pred_original, labels=label_encoder.classes_)
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
     plt.title(f'Matrice de confusion - {name}')
     plt.ylabel('Vraie classe')
     plt.xlabel('Classe prédite')
