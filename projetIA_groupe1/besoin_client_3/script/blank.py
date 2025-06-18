@@ -29,6 +29,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
+from sklearn.svm import SVR
+
 
 
 
@@ -154,14 +160,13 @@ def train_model(X_train: pd.DataFrame, y_train: pd.DataFrame,
     Raises:
         ValueError: Si le type de modèle n'est pas reconnu
     """
-    print(f"\nEntraînement d'un modèle {model_type}...")
 
     # Choix du modèle
     if model_type == 'random_forest':
         model = RandomForestRegressor(n_estimators=100, random_state=42)
         use_scaler = False
     elif model_type == 'gradient_boosting':
-        model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+        model = MultiOutputRegressor(GradientBoostingRegressor(n_estimators=100, random_state=42))
         use_scaler = False
     elif model_type == 'knn':
         model = KNeighborsRegressor(n_neighbors=5)
@@ -210,6 +215,7 @@ def save_metrics_to_txt(metrics, filepath):
         f"- Premier quartile: {metrics['q1_geo_error']:.2f} mètres\n"
         f"- Médiane: {metrics['median_geo_error']:.2f} mètres\n"
         f"- Troisième quartile: {metrics['q3_geo_error']:.2f} mètres\n"
+        f"- 90 quartile: {metrics['q90_geo_error']:.2f} mètres\n"
         f"- Minimum: {metrics['min_geo_error']:.2f} mètres\n"
         f"- Maximum: {metrics['max_geo_error']:.2f} mètres\n"
     )
@@ -223,7 +229,7 @@ def save_metrics_to_txt(metrics, filepath):
 
     print(f"Résultats sauvegardés dans {filepath}")
 
-def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame) -> dict:
+def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame, model_type: str) -> dict:
     """
     Évalue les performances d'un modèle entraîné.
 
@@ -280,7 +286,7 @@ def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame) ->
     # print(f"- Minimum: {metrics['min_geo_error']:.2f} mètres")
     # print(f"- Maximum: {metrics['max_geo_error']:.2f} mètres")
     
-    save_metrics_to_txt(metrics, f'logs/{model.model_type}metrics.txt')
+    save_metrics_to_txt(metrics, f'logs/{model_type}metrics.txt')
     
     return metrics
 
@@ -296,11 +302,11 @@ def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarr
     """
 
     # Histogramme des erreurs
-    plt.hist(errors, bins=50, edgecolor='k')
-    plt.xlabel("Erreur (mètres)")
-    plt.ylabel("Nombre d'exemples")
-    plt.title("Distribution des erreurs de position")
-    plt.show()
+    # plt.hist(errors, bins=50, edgecolor='k')
+    # plt.xlabel("Erreur (mètres)")
+    # plt.ylabel("Nombre d'exemples")
+    # plt.title("Distribution des erreurs de position")
+    # plt.show()
 
     # Création de la carte centrée
     map_center = [y_test["LAT_next"].mean(), y_test["LON_next"].mean()]
@@ -355,7 +361,7 @@ if __name__ == "__main__":
     df = pd.read_csv("data/prepared_data.csv")
     # print(df.head(50))
     # # 2. Sélection des features et target
-    features = ["LAT", "LON", "SOG", "hour", "dir_x", "dir_x",
+    features = ["LAT", "LON", "SOG", "hour", "dir_x", "dir_y",
                 "hour_sin", "hour_cos", "delta_t", "is_stopped", "weekday", 
                 "VesselType", "timestamp"]
     X = df[features]
@@ -379,11 +385,11 @@ if __name__ == "__main__":
     
         # model = joblib.load('models/random_forest_model.pkl')
         # 5. Évaluation du modèle
-        metrics = evaluate_model(model, X_test, y_test)
+        metrics = evaluate_model(model, X_test, y_test, model_type)
         
         # 6. Visualisation des résultats
         y_pred = model.predict(X_test)
         errors = haversine(y_test["LAT_next"], y_test["LON_next"], y_pred[:, 0], y_pred[:, 1])
-        visualize_results(errors, y_test, y_pred, X_meta_test["MMSI"], model_type)
+        visualize_results(errors, y_test, y_pred, X_meta_test["MMSI"], f"{model_type}_predictions")
 
 
