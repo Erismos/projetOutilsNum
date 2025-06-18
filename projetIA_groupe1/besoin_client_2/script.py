@@ -9,6 +9,7 @@ from sklearn.preprocessing import StandardScaler
 # Chargement des modèles
 try:
     preprocessor = joblib.load('processor.joblib')
+    label_ecoder = joblib.load('label_encoder.joblib')
     model = joblib.load('best_model.joblib')
     print("good")
 except FileNotFoundError as e:
@@ -16,17 +17,11 @@ except FileNotFoundError as e:
     exit(1)
 
 def predict_vessel_type(input_data):
-    #Prédit le type de navire à partir des données d'entrée
     try:
-        # Conversion en DataFrame
         input_df = pd.DataFrame([input_data])
-        
-        # Prétraitement
-        processed_data = preprocessor.transform(input_df)
-        
-        # Prédiction
-        prediction = model.predict(processed_data)
-        return prediction[0]
+        prediction = model.predict(input_df)
+        prediction_label = label_encoder.inverse_transform(prediction)
+        return prediction_label[0]
     except Exception as e:
         print(f"Erreur lors de la prédiction: {e}")
         return None

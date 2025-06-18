@@ -53,6 +53,7 @@ preprocessor = ColumnTransformer(
 
 preprocessor.fit(x_train)
 
+joblib.dump(label_encoder, "label_encoder.joblib")
 joblib.dump(preprocessor, "processor.joblib")
 
 # 2: apprentissage supervisé pour la classification

@@ -676,7 +676,7 @@ if __name__ == "__main__":
     
     
     # Configuration des chemins
-    input_csv = "data/export_IA.csv"
+    input_csv = "../data/export_IA.csv"
     prepared_data_dir = "prepared_data_trajectory"
     model_output_dir = "trajectory_model"
     script_output_dir = "script"
@@ -713,7 +713,7 @@ if __name__ == "__main__":
         prepared_data['X'],
         prepared_data['y'],
         model_output_dir,
-        epochs=1000,
+        epochs=2,
         batch_size=64
     )
 
