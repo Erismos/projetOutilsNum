@@ -209,8 +209,8 @@ fig = px.scatter_mapbox(
 fig.update_layout(title="Trajectoires des navires par cluster - kmeans")
 fig.show() # on affiche la carte
 
-fig.write_html("carte/trajectoires_clusters.html") # on sauvegarde la carte dans un fichier html
-print("Carte des trajectoires enregistrée dans trajectoires_clusters.html")
+fig.write_html("carte/trajectoires_clusters_kmeans.html") # on sauvegarde la carte dans un fichier html
+print("Carte des trajectoires enregistrée dans trajectoires_clusters_kmeans.html")
 
 # on affiche les scores finaux
 print("\n Scores finaux (déjà calculés pour le meilleur modèle sur l'échantillon de 20000) :")
