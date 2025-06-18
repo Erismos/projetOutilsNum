@@ -58,22 +58,26 @@ joblib.dump(preprocessor, "processor.joblib")
 # 2: apprentissage supervisé pour la classification
 
 models = {
-    'RandomForest': {
-        'model': RandomForestClassifier(random_state=42),
-        'params': {
-            'classifier__n_estimators': [100, 200],
-            'classifier__max_depth': [None, 10, 20],
-            'classifier__class_weight' : ['balanced', None]
-        }
-    },
-    #'XGBoost': {
-    #    'model': XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42),
+    #'RandomForest': {
+    #    'model': RandomForestClassifier(random_state=42),
     #    'params': {
     #        'classifier__n_estimators': [100, 200],
-    #        'classifier__learning_rate': [0.01, 0.1],
-    #        'classifier__max_depth': [3, 6]
+    #        'classifier__max_depth': [None, 10, 20],
+    #        'classifier__class_weight' : ['balanced', None]
     #    }
     #},
+    'XGBoost': {
+        'model': XGBClassifier(
+            tree_method='hist',           # GPU training
+            device='cuda',
+            random_state=42
+        ),
+        'params': {
+            'classifier__n_estimators': [100, 200],
+            'classifier__learning_rate': [0.01, 0.1],
+            'classifier__max_depth': [3, 6]
+        }
+    },
     #'SVM': {
     #    'model': SVC(random_state=42),
     #    'params': {
