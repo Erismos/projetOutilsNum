@@ -26,6 +26,7 @@ from sklearn.ensemble import VotingRegressor, RandomForestRegressor, GradientBoo
 from sklearn.base import clone
 from sklearn.svm import SVR
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.multioutput import MultiOutputRegressor
 
 
 # Import joblib
@@ -195,8 +196,8 @@ def build_enhanced_model(model_type='ridge'):
         regressor = RidgeCV(alphas=[0.1, 1.0, 10.0], cv=5)
     elif model_type == 'lasso':
         regressor = LassoCV(alphas=[0.1, 1.0, 10.0], cv=5, max_iter=10000)
-    elif model_type == 'elastic':
-        regressor = ElasticNetCV(l1_ratio=[.1, .5, .9], cv=5, max_iter=10000)
+    # elif model_type == 'elastic':
+    #     regressor = ElasticNetCV(l1_ratio=[.1, .5, .9], cv=5, max_iter=10000)
     else:
         regressor = LinearRegression()
     
@@ -321,10 +322,10 @@ def compare_models(X_train, y_train, X_test, y_test, horizon_min):
     models = {
         'Ridge': RidgeCV(alphas=[0.1, 1.0, 10.0], cv=5),
         'Lasso': MultiTaskLassoCV(alphas=[0.1, 1.0, 10.0], cv=5, max_iter=10000),
-        'ElasticNet': MultiTaskElasticNetCV(l1_ratio=[.1, .5, .9], cv=5, max_iter=10000),
+        # 'ElasticNet': MultiTaskElasticNetCV(l1_ratio=[.1, .5, .9], cv=5, max_iter=10000),
         'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
-        'GradientBoosting': GradientBoostingRegressor(random_state=42),
-        'SVR': SVR(),
+        'GradientBoosting': MultiOutputRegressor(GradientBoostingRegressor(random_state=42, n_estimators=50)),
+        'SVR': MultiOutputRegressor(SVR()),
         'KNeighbors': KNeighborsRegressor()
     }
     

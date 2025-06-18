@@ -119,66 +119,60 @@ plt.savefig("graphique/graph_scores_subplots_kmeans.png") # on sauvegarde le gra
 print("Graphique enregistré dans graph_scores_subplots_kmeans.png")
 plt.show() # on affiche le graphique
 
-def select_best_k_by_combined_score(df_scores, weights=None):
+def select_best_model(results_df, weights=None):
     """
-    Sélectionne le meilleur k en combinant les 3 métriques : silhouette, calinski_harabasz, davies_bouldin.
-    
+    Sélectionne le meilleur modèle parmi tous les (k, random_state) selon un score combiné.
+
     Parameters:
-    - df_scores: DataFrame contenant les colonnes ['k', 'silhouette', 'calinski_harabasz', 'davies_bouldin']
-    - weights: dictionnaire des poids pour chaque métrique 
-    
+    - results_df: DataFrame avec les scores pour chaque (k, random_state)
+    - weights: dictionnaire de pondération des scores (default = {'silhouette':0.4, 'calinski_harabasz':0.4, 'davies_bouldin':0.2})
+
     Returns:
-    - best_k: valeur de k ayant le meilleur score combiné
-    - df_scores: DataFrame mis à jour avec les scores normalisés et combinés
+    - best_k: nombre optimal de clusters
+    - best_random_state: valeur du random_state associée au meilleur modèle
+    - best_model_info: dictionnaire avec le modèle et ses scores
+    - scored_df: dataframe avec les scores normalisés et combinés
     """
-    if weights is None: # si pas de poids alors poids par défaut
+    if weights is None: # on définit des poids par défaut 
         weights = {'silhouette': 0.4, 'calinski_harabasz': 0.4, 'davies_bouldin': 0.2}
     
-    df = df_scores.copy() # créer une copie du dataframe pour ne pas modifer l'original
-
-    # Normalisation des scores (Min-Max Scaling)
-    for metric in ['silhouette', 'calinski_harabasz']: # normalisation normale pour silhouette et calinski-harabasz
+    df = results_df.copy() # on copie le datafrale pour éviter de modifier l'original
+    
+    # Normalisation
+    for metric in ['silhouette', 'calinski_harabasz']: # normalisation min-max pour silhouette et calinski-harabasz
         df[f"{metric}_norm"] = (df[metric] - df[metric].min()) / (df[metric].max() - df[metric].min())
-    # Davies-Bouldin : score inverse 
-    db = df['davies_bouldin']
-    df['davies_bouldin_norm'] = (db.max() - db) / (db.max() - db.min()) # normalisation en inversant les scores avant
+    db = df['davies_bouldin'] # on inverse la normalisation min-max
+    df['davies_bouldin_norm'] = (db.max() - db) / (db.max() - db.min())
 
-    # Calcul du score pondéré 
+    # Score combiné
+    # calcul d’un score global pondéré qui combine les trois métriques normalisées selon les poids définis
     df['combined_score'] = (
         weights['silhouette'] * df['silhouette_norm'] +
         weights['calinski_harabasz'] * df['calinski_harabasz_norm'] +
         weights['davies_bouldin'] * df['davies_bouldin_norm']
     )
 
-    # Choix du meilleur k (le plus haut du score combiné)
-    best_k = df.loc[df['combined_score'].idxmax(), 'k']
-    return int(best_k), df # on retorune le meilleur k et le dataframe
+    best_row = df.loc[df['combined_score'].idxmax()] # recupère la ligne avec le meilleur score combiné
+    best_k = int(best_row['k']) # on trouve le meilleur k
+    best_random_state = int(best_row['random_state']) # on trouve le meilleur random_state
+    return best_k, best_random_state, all_models[(best_k, best_random_state)], df
 
+best_k, best_random_state, best_model_info, scored_df = select_best_model(results_df) # on appele la fonction avec le dataframe des resultatss
+# on affiche les résultats
+print(f"Meilleur modèle : k = {best_k}, random_state = {best_random_state}")
+print(f"Silhouette Score : {best_model_info['silhouette']}")
+print(f"Calinski-Harabasz Score : {best_model_info['calinski_harabasz']}")
+print(f"Davies-Bouldin Score : {best_model_info['davies_bouldin']}")
 
-
-# on choisi le meilleur k selon les métriques
-best_k, scored_df = select_best_k_by_combined_score(avg_scores_df)
-print(f"Meilleur k (combiné des métriques) : {best_k}") # on l'affiche 
-
-# on visualise le combined score
-plt.plot(scored_df['k'], scored_df['combined_score'], marker='o') # courbe du score combiné en fonction de k
-plt.xlabel("Nombre de clusters (k)") # titre de l'axe x
-plt.ylabel("Score combiné") # titre de l'axe y 
-plt.title("Choix du meilleur k (score combiné)") # tire du graphique 
-plt.grid(True) # on affiche une grille pour mieux lire le graphique
-plt.savefig("graphique/kmeans_combined.png") # on sauvegarde dans une fichier png
-print("Graphique enregistré dans kmeans_combined.png") 
-plt.show() # on affiche le graphique
-
-# on sélectionne le meilleur modèle pour ce k 
-models_for_best_k = {
-    # on extrait les modèles entrainés par le meilleur k
-    key: val for key, val in all_models.items() if key[0] == best_k
-}
-best_model_info = max(models_for_best_k.values(), key=lambda m: m['silhouette']) # on prend le modèle avec le meilleur score silhouette
-best_random_state = [key[1] for key, val in models_for_best_k.items() if val == best_model_info][0] # on trouve le random_state pour ce modèle
-print(f"Meilleur random_state pour k={int(best_k)} : {best_random_state}") # on les affiche (k et random_state)
-print(f"Silhouette de ce modèle : {best_model_info['silhouette']}") # on affiche le score silhouette du modèle
+# Visualisation
+plt.plot(scored_df['k'], scored_df['combined_score'], marker='o')
+plt.xlabel("Nombre de clusters (k)")
+plt.ylabel("Score combiné")
+plt.title("Choix du meilleur modèle (score combiné)")
+plt.grid(True)
+plt.savefig("graphique/kmeans_combined.png")
+plt.show()
+print("Graphique enregistré dans kmeans_combined.png")
 
 # Clustering final sur tout le dataset 
 X_full = df[['SOG', 'COG', 'Heading']] # on sélectionne les colonnes du dataframe
@@ -209,8 +203,8 @@ fig = px.scatter_mapbox(
 fig.update_layout(title="Trajectoires des navires par cluster - kmeans")
 fig.show() # on affiche la carte
 
-fig.write_html("carte/trajectoires_clusters.html") # on sauvegarde la carte dans un fichier html
-print("Carte des trajectoires enregistrée dans trajectoires_clusters.html")
+fig.write_html("carte/trajectoires_clusters_kmeans.html") # on sauvegarde la carte dans un fichier html
+print("Carte des trajectoires enregistrée dans trajectoires_clusters_kmeans.html")
 
 # on affiche les scores finaux
 print("\n Scores finaux (déjà calculés pour le meilleur modèle sur l'échantillon de 20000) :")
@@ -231,3 +225,5 @@ print(f"\n Temps d'exécution total : {elapsed_time:.2f} secondes") # on affiche
 # dans chaque cluster il y a plusieurs bateaux car ils ont le même schéma de navigation (sog; heading; cog).
 # les couleurs sur la carte sont les différents clusters 
 # donc 2 bateaux appertenant au même cluster auront la même couleur
+
+# results_df = tableau avec toutes les combinaisons (k, random_state) testées, et les scores de clustering associés pour chacune.
