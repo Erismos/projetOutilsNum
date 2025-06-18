@@ -2,8 +2,8 @@ import joblib
 import numpy as np
 
 # Charger les modèles sauvegardés
-model = joblib.load("kmeans_model.pkl")
-scaler = joblib.load("scaler.pkl")
+model = joblib.load("pkl/kmeans_model.pkl")
+scaler = joblib.load("pkl/scaler_kmeans.pkl")
 
 # Demander les entrées à l'utilisateur
 sog = float(input("Entrez la vitesse (SOG) : "))

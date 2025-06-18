@@ -48,7 +48,7 @@ for eps in eps_values:
 
 # Résultats
 results_df = pd.DataFrame(results, columns=['eps', 'min_samples', 'silhouette', 'calinski_harabasz', 'davies_bouldin', 'n_clusters'])
-results_df.to_csv("dbscan_metrics.csv", index=False)
+results_df.to_csv("csv/dbscan_metrics.csv", index=False)
 
 # Pour chaque valeur de min_samples, on trace les courbes
 unique_min_samples = sorted(results_df['min_samples'].unique())
@@ -68,7 +68,7 @@ for i, metric in enumerate(['silhouette', 'calinski_harabasz', 'davies_bouldin']
     ax.legend()
 
 plt.tight_layout()
-plt.savefig("dbscan_scores_subplots.png")
+plt.savefig("graphique/dbscan_scores_subplots.png")
 print("Graphiques des scores DBSCAN enregistrés dans dbscan_scores_subplots.png")
 plt.show()
 
@@ -110,43 +110,38 @@ plt.ylabel("Score combiné")
 plt.title("Score combiné DBSCAN selon eps")
 plt.legend()
 plt.grid(True)
-plt.savefig("dbscan_combined_score.png")
+plt.savefig("graphique/dbscan_combined_score.png")
 plt.show()
 
 dbscan_final = DBSCAN(eps=best_eps, min_samples=best_min_samples)
 clusters = dbscan_final.fit_predict(X_sample_scaled)
 
-# Ajouter dans le DataFrame
+# Ajout des clusters dans le dataframe
 df.loc[X_sample.index, 'Cluster'] = clusters
-df.to_csv("export_IA_with_clusters_dbscan.csv", index=False)
-
-# Ajout des clusters
-df.loc[X_sample.index, 'Cluster'] = clusters
-df.to_csv("export_IA_with_clusters_dbscan.csv", index=False)
+df.to_csv("csv/export_IA_with_clusters_dbscan.csv", index=False)
 print("Fichier sauvegardé : export_IA_with_clusters_dbscan.csv")
 
 # Carte
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime'])
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime'])
 
-fig = px.line_mapbox(
+fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
     color="Cluster",
-    line_group="MMSI",
     hover_name="MMSI",
     zoom=3,
     mapbox_style="open-street-map"
 )
 fig.update_layout(title="Trajectoires des navires par cluster (DBSCAN)")
-fig.write_html("trajectoires_clusters_dbscan.html")
+fig.write_html("carte/trajectoires_clusters_dbscan.html")
 fig.show()
 print("Carte enregistrée dans trajectoires_clusters_dbscan.html")
 
 # Sauvegarde du modèle et du scaler
-joblib.dump(dbscan_final, "dbscan_model.pkl")
-joblib.dump(scaler_sample, "scaler_dbscan.pkl")
+joblib.dump(dbscan_final, "pkl/dbscan_model.pkl")
+joblib.dump(scaler_sample, "pkl/scaler_dbscan.pkl")
 
 end_time = time.time()
 print(f"\nTemps d'exécution total : {end_time - start_time:.2f} secondes")

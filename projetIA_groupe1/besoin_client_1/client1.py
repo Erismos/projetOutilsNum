@@ -18,6 +18,16 @@ print(df.dtypes)
 #nombre de lignes dans le fichier 
 print(len(df))
 
+# Sélection des variables pertinentes
+vars_corr = df[['SOG', 'COG', 'Heading', 'LAT', 'LON']].dropna()
+
+# Matrice de corrélation
+corr_matrix = vars_corr.corr()
+
+# Affichage du tableau dans la console
+print(" Matrice de corrélation (SOG, COG, Heading, LAT, LON) :\n")
+print(corr_matrix.round(2))
+
 # on fait un échantillonage pour trouver le nombre de clusters k
 # on prend 10% des données 
 df_sample = df.sample(n=20000, random_state=0)
@@ -59,7 +69,7 @@ for k in range(2, 11):
 # Stockage des résultats en dataframe et moyenne des scores pour chaque k
 results_df = pd.DataFrame(results, columns=['k', 'random_state', 'silhouette', 'calinski_harabasz', 'davies_bouldin'])
 avg_scores_df = results_df.groupby('k')[['silhouette', 'calinski_harabasz', 'davies_bouldin']].mean().reset_index()
-avg_scores_df.to_csv("clustering_metrics.csv", index=False) 
+avg_scores_df.to_csv("csv/kmeans_metrics.csv", index=False) 
 
 # Affichage des scores / visualisation
 fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(8, 12), sharex=True)
@@ -82,8 +92,8 @@ axes[2].set_xlabel("Nombre de clusters (k)")
 
 # Mise en forme
 plt.tight_layout()
-plt.savefig("graph_scores_subplots.png")
-print("Graphique enregistré dans graph_scores_subplots.png")
+plt.savefig("graphique/graph_scores_subplots_kmeans.png")
+print("Graphique enregistré dans graph_scores_subplots_kmeans.png")
 plt.grid(True)
 plt.show()
 
@@ -133,6 +143,8 @@ plt.xlabel("Nombre de clusters (k)")
 plt.ylabel("Score combiné")
 plt.title("Choix du meilleur k (score combiné)")
 plt.grid(True)
+plt.savefig("graphique/kmeans_combined.png")
+print("Graphique enregistré dans kmeans_combined.png")
 plt.show()
 
 # on sélectionne le meilleur modèle pour ce k 
@@ -154,19 +166,18 @@ model_kmeans_final = KMeans(n_clusters=int(best_k), random_state=best_random_sta
 clusters = model_kmeans_final.fit_predict(X_full_scaled)
 # on ajoute les clusters au DataFrame
 df['Cluster'] = clusters
-df.to_csv("export_IA_with_clusters.csv", index=False)
-print("Fichier sauvegardé : export_IA_with_clusters.csv (avec colonnes de cluster)")
+df.to_csv("csv/export_IA_with_clusters.csv", index=False)
+print("Fichier sauvegardé : export_IA_with_clusters_kmeans.csv (avec colonnes de cluster)")
 
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime'])
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime'])
 
 # Visualisation sur carte
-fig = px.line_mapbox(
+fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
     color="Cluster",
-    line_group="MMSI",
     hover_name="MMSI",
     zoom=3,
     mapbox_style="open-street-map"
@@ -174,7 +185,7 @@ fig = px.line_mapbox(
 fig.update_layout(title="Trajectoires des navires par cluster")
 fig.show()
 
-fig.write_html("trajectoires_clusters.html")
+fig.write_html("carte/trajectoires_clusters.html")
 print("Carte des trajectoires enregistrée dans trajectoires_clusters.html")
 
 # Scores finaux
@@ -184,8 +195,8 @@ print("Calinski-Harabasz Score:", best_model_info['calinski_harabasz'])
 print("Davies-Bouldin Score:", best_model_info['davies_bouldin'])
 
 # on sauvegarde le modèle
-joblib.dump(model_kmeans_final, "kmeans_model.pkl")
-joblib.dump(scaler, "scaler_kmeans.pkl")
+joblib.dump(model_kmeans_final, "pkl/kmeans_model.pkl")
+joblib.dump(scaler, "pkl/scaler_kmeans.pkl")
 
 end_time = time.time()
 elapsed_time = end_time - start_time
