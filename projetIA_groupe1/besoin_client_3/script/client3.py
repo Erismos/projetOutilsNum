@@ -612,7 +612,7 @@ if __name__ == "__main__":
         prepared_data['X'],
         prepared_data['y'],
         model_output_dir,
-        epochs=1000,
+        epochs=2,
         batch_size=64
     )
 
