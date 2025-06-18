@@ -667,12 +667,13 @@ def verify_data_shapes(data):
 
 if __name__ == "__main__":
     
-    check_gpu_usage()
-    tf.keras.mixed_precision.set_global_policy('mixed_float16')
-    
     # Configurer le parallélisme des threads
     tf.config.threading.set_intra_op_parallelism_threads(8)  # Pour les opérations individuelles
     tf.config.threading.set_inter_op_parallelism_threads(8)  # Pour le parallélisme entre opérations
+    
+    check_gpu_usage()
+    tf.keras.mixed_precision.set_global_policy('mixed_float16')
+    
     
     # Configuration des chemins
     input_csv = "data/export_IA.csv"
