@@ -24,11 +24,10 @@ target = "VesselType"
 x = data[features]
 y = data[target]
 
-# Encodage une seule fois ici
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
-# Nettoyage : garder seulement les classes avec au moins 2 exemples
+# garder seulement les classes avec au moins 2 exemples
 from collections import Counter
 counter = Counter(y_encoded)
 classes_to_keep = [cls for cls, count in counter.items() if count >= 2]
@@ -37,13 +36,11 @@ mask = np.isin(y_encoded, classes_to_keep)
 x = x[mask]
 y_encoded = y_encoded[mask]
 
-# Ré-encoder pour labels contigus
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y_encoded)
 
-# Stratify sur y_encoded (labels numériques)
 x_train, x_test, y_train, y_test = train_test_split(
-    x, y_encoded, test_size=0.2, stratify=y_encoded, random_state=42
+    x, y_encoded, test_size=0.2, random_state=42
 )
 
 print("Toutes classes :", np.unique(y_encoded))
