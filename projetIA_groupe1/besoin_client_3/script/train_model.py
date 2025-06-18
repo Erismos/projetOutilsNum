@@ -11,21 +11,37 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import zscore
+import time
 
 # Import sklearn components
 from sklearn.model_selection import train_test_split, TimeSeriesSplit, GridSearchCV, RandomizedSearchCV
-from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, RidgeCV, LassoCV, ElasticNetCV
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, RidgeCV, LassoCV, ElasticNetCV, MultiTaskLassoCV, MultiTaskElasticNetCV
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import (StandardScaler, RobustScaler, MinMaxScaler, 
                                    OneHotEncoder, PolynomialFeatures)
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.feature_selection import RFECV, SelectFromModel
-from sklearn.ensemble import VotingRegressor
+from sklearn.feature_selection import RFECV, SelectFromModel, VarianceThreshold
+from sklearn.ensemble import VotingRegressor, RandomForestRegressor, GradientBoostingRegressor
 from sklearn.base import clone
+from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor
+
 
 # Import joblib
 import joblib
+
+from geopy.distance import geodesic
+
+def calculate_geographic_distance(y_true, y_pred):
+    """
+    Calcule la distance géographique entre les prédictions et les vraies positions
+    Retourne les distances en mètres
+    """
+    distances = []
+    for (lat_true, lon_true), (lat_pred, lon_pred) in zip(y_true.values, y_pred):
+        distances.append(geodesic((lat_true, lon_true), (lat_pred, lon_pred)).meters)
+    return np.array(distances)
 
 # ----------------------------
 # 1. Chargement des données amélioré
@@ -234,24 +250,48 @@ def train_with_cv(X, y, model, n_splits=5):
 # ----------------------------
 # 6. Évaluation améliorée
 # ----------------------------
-def enhanced_evaluation(model, X_test, y_test, target_name):
+def enhanced_evaluation(model, X_test, y_test, target_name, target_index=None):
     """Évaluation complète avec visualisations"""
     
-    # Prédictions
-    y_pred = model.predict(X_test)
+    # Prédictions complètes
+    y_pred_all = model.predict(X_test)
     
-    # Métriques
+    # Détection de la colonne si non spécifiée
+    if target_index is None:
+        target_index = 0 if target_name == "LATITUDE" else 1
+    
+    # Sélection de la colonne appropriée
+    y_pred = y_pred_all[:, target_index]
+    y_test_values = y_test.values if hasattr(y_test, 'values') else y_test
+    
+    # Métriques standard
     metrics = {
-        'r2': r2_score(y_test, y_pred),
-        'mae': mean_absolute_error(y_test, y_pred),
-        'rmse': np.sqrt(mean_squared_error(y_test, y_pred))
+        'r2': r2_score(y_test_values, y_pred),
+        'mae': mean_absolute_error(y_test_values, y_pred),
+        'rmse': np.sqrt(mean_squared_error(y_test_values, y_pred))
     }
+    
+    # Calcul de l'erreur géographique si on évalue les deux dimensions
+    if hasattr(y_test, 'columns') and len(y_test.columns) == 2:  # Si y_test est un dataframe avec LAT et LON
+        geo_distances = calculate_geographic_distance(y_test, y_pred_all)
+        metrics.update({
+            'mean_geo_distance_m': np.mean(geo_distances),
+            'median_geo_distance_m': np.median(geo_distances),
+            'std_geo_distance_m': np.std(geo_distances)
+        })
     
     # Affichage
     print(f"\nPerformance pour {target_name}:")
     print(f"R²: {metrics['r2']:.4f}")
-    print(f"MAE: {metrics['mae']:.4f}")
+    print(f"MAE: {metrics['mae']:.4f}") 
     print(f"RMSE: {metrics['rmse']:.4f}")
+    
+    if 'mean_geo_distance_m' in metrics:
+        print("\nMétriques géographiques:")
+        print(f"Distance moyenne: {metrics['mean_geo_distance_m']:.2f} m")
+        print(f"Distance médiane: {metrics['median_geo_distance_m']:.2f} m")
+        print(f"Écart-type: {metrics['std_geo_distance_m']:.2f} m")
+        print(f"(≈ {metrics['mean_geo_distance_m']/1000:.2f} km)")
     
     # Visualisation
     plt.figure(figsize=(12, 5))
@@ -274,6 +314,67 @@ def enhanced_evaluation(model, X_test, y_test, target_name):
     
     return metrics
 
+def compare_models(X_train, y_train, X_test, y_test, horizon_min):
+    """Compare plusieurs modèles et retourne leurs performances"""
+    
+    # Liste des modèles à tester
+    models = {
+        'Ridge': RidgeCV(alphas=[0.1, 1.0, 10.0], cv=5),
+        'Lasso': MultiTaskLassoCV(alphas=[0.1, 1.0, 10.0], cv=5, max_iter=10000),
+        'ElasticNet': MultiTaskElasticNetCV(l1_ratio=[.1, .5, .9], cv=5, max_iter=10000),
+        'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
+        'GradientBoosting': GradientBoostingRegressor(random_state=42),
+        'SVR': SVR(),
+        'KNeighbors': KNeighborsRegressor()
+    }
+    
+    results = []
+    
+    for name, model in models.items():
+        print(f"\n=== Entraînement du modèle {name} ===")
+        
+        # Construction du pipeline complet
+        pipeline = Pipeline([
+            ('preprocessor', build_enhanced_preprocessor()),
+            ('variance_threshold', VarianceThreshold(threshold=0.01)),
+            ('poly', PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)),
+            ('feature_selection', SelectFromModel(estimator=LinearRegression(), threshold='median')),
+            ('regressor', model)
+        ])
+        
+        # Entraînement
+        start_time = time.time()
+        pipeline.fit(X_train, y_train)
+        train_time = time.time() - start_time
+        
+        # Prédiction
+        y_pred = pipeline.predict(X_test)
+        
+        # Calcul des métriques
+        geo_distances = calculate_geographic_distance(y_test, y_pred)
+        
+        metrics = {
+            'Modèle': name,
+            'Temps d\'entraînement (s)': train_time,
+            'R2_LAT': r2_score(y_test['target_LAT'], y_pred[:, 0]),
+            'R2_LON': r2_score(y_test['target_LON'], y_pred[:, 1]),
+            'MAE_LAT': mean_absolute_error(y_test['target_LAT'], y_pred[:, 0]),
+            'MAE_LON': mean_absolute_error(y_test['target_LON'], y_pred[:, 1]),
+            'Distance moyenne (m)': np.mean(geo_distances),
+            'Distance médiane (m)': np.median(geo_distances),
+            'Distance max (m)': np.max(geo_distances)
+        }
+        
+        results.append(metrics)
+        
+        # Sauvegarde du modèle
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        model_path = f"model_{name}_{horizon_min}min_{timestamp}.pkl"
+        joblib.dump(pipeline, model_path)
+        print(f"Modèle {name} sauvegardé sous {model_path}")
+    
+    return pd.DataFrame(results)
+
 # ----------------------------
 # 7. Fonction principale améliorée
 # ----------------------------
@@ -281,79 +382,35 @@ def main():
     # Configuration
     DATA_PATH = '../data/export_IA.csv'
     HORIZON_MIN = 5  # Prédiction 15 minutes dans le futur
-    MODEL_TYPE = 'ridge'  # 'ridge', 'lasso', 'elastic', 'linear'
     
     print("=== Chargement des données ===")
-    df = load_enhanced_data(DATA_PATH, sample_fraction=1.0)
+    df = load_enhanced_data(DATA_PATH, sample_fraction=0.1)  # Réduisez pour les tests
     
     print("\n=== Feature engineering ===")
     df = enhanced_feature_engineering(df, HORIZON_MIN)
     
-    # Vérification des NaN
-    print("\n=== Vérification des valeurs manquantes ===")
-    print(df.isna().sum())
-    
     # Sélection des features et target
     feature_cols = [col for col in df.columns if col not in 
                    ['BaseDateTime', 'MMSI', 'LAT', 'LON', 'target_LAT', 'target_LON']]
     X = df[feature_cols]
-    y_lat = df['target_LAT']
-    y_lon = df['target_LON']
+    y = df[['target_LAT', 'target_LON']]
     
-    # Vérification finale
-    assert not X.isna().any().any(), "Il reste des NaN dans les features!"
-    assert not y_lat.isna().any(), "Il reste des NaN dans y_lat!"
-    assert not y_lon.isna().any(), "Il reste des NaN dans y_lon!"
+    # Split train/test
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False, random_state=42)
     
-    # Sélection des features et target
-    feature_cols = [col for col in df.columns if col not in 
-                   ['BaseDateTime', 'MMSI', 'LAT', 'LON', 'target_LAT', 'target_LON']]
-    X = df[feature_cols]
-    y_lat = df['target_LAT']
-    y_lon = df['target_LON']
+    # Comparaison des modèles
+    results_df = compare_models(X_train, y_train, X_test, y_test, HORIZON_MIN)
     
-    # Split train/test en conservant l'ordre temporel
-    test_size = 0.2
-    split_idx = int(len(X) * (1 - test_size))
+    # Affichage des résultats
+    print("\n=== Résultats comparés ===")
+    pd.set_option('display.float_format', '{:.2f}'.format)
+    print(results_df.sort_values('Distance moyenne (m)'))
     
-    X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-    y_lat_train, y_lat_test = y_lat.iloc[:split_idx], y_lat.iloc[split_idx:]
-    y_lon_train, y_lon_test = y_lon.iloc[:split_idx], y_lon.iloc[split_idx:]
-    
-    print(f"\n=== Entraînement modèle LATITUDE ({MODEL_TYPE.upper()}) ===")
-    model_lat, lat_metrics = train_with_cv(
-        X_train, y_lat_train, 
-        build_enhanced_model(MODEL_TYPE)
-    )
-    
-    print("\n=== Entraînement modèle LONGITUDE ===")
-    model_lon, lon_metrics = train_with_cv(
-        X_train, y_lon_train, 
-        build_enhanced_model(MODEL_TYPE)
-    )
-    
-    print("\n=== Évaluation finale ===")
-    print("\nModèle Latitude - Scores CV:")
-    for i, m in enumerate(lat_metrics):
-        print(f"Fold {i+1}: R²={m['r2']:.4f}, MAE={m['mae']:.4f}")
-    
-    lat_metrics_test = enhanced_evaluation(model_lat, X_test, y_lat_test, "LATITUDE")
-    
-    print("\nModèle Longitude - Scores CV:")
-    for i, m in enumerate(lon_metrics):
-        print(f"Fold {i+1}: R²={m['r2']:.4f}, MAE={m['mae']:.4f}")
-    
-    lon_metrics_test = enhanced_evaluation(model_lon, X_test, y_lon_test, "LONGITUDE")
-    
-    # Sauvegarde des modèles
-    print("\n=== Sauvegarde des modèles ===")
+    # Sauvegarde des résultats
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    model_prefix = f"enhanced_{MODEL_TYPE}_{HORIZON_MIN}min_{timestamp}"
-    
-    joblib.dump(model_lat, f'{model_prefix}_lat.pkl')
-    joblib.dump(model_lon, f'{model_prefix}_lon.pkl')
-    
-    print(f"\nModèles sauvegardés avec préfixe: {model_prefix}")
+    results_df.to_csv(f'model_comparison_{HORIZON_MIN}min_{timestamp}.csv', index=False)
+    print("\nRésultats sauvegardés dans un fichier CSV")
 
 if __name__ == "__main__":
     main()

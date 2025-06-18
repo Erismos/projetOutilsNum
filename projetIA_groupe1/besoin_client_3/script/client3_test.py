@@ -100,9 +100,9 @@ def prepare_trajectory_data(csv_path, output_dir, time_horizons=[5, 10, 15]):
         targets[f'target_{t}m'] = np.array(targets[f'target_{t}m'], dtype=np.float32)
     
     return {'X': X, 'y': targets, 'feature_names': feature_cols}
-
+from tensorflow.keras.layers import Lambda
 def build_improved_model(input_shape):
-    """Modèle optimisé pour GPU avec attention"""
+    """Modèle optimisé avec attention corrigée"""
     strategy = tf.distribute.MirroredStrategy()
     
     with strategy.scope():
@@ -115,18 +115,33 @@ def build_improved_model(input_shape):
         x = Bidirectional(LSTM(128, return_sequences=True))(x)
         x = Dropout(0.3)(x)
         
-        # Mécanisme d'attention
-        query = Dense(128)(x[:, -1, :])
-        query = tf.expand_dims(query, axis=1)
-        attention = Attention()([query, x])
-        attention = tf.squeeze(attention, axis=1)
+        # Mécanisme d'attention corrigé
+        # 1. Projection pour aligner les dimensions
+        query_proj = Dense(256)(x[:, -1, :])  # 256 = 2*128 (bidirectional)
+        query_expanded = Lambda(lambda x: tf.expand_dims(x, axis=1),
+                              output_shape=(None, 1, 256))(query_proj)
+        
+        # 2. Attention avec dimensions compatibles
+        def attention_layer(query_value):
+            query, value = query_value
+            # Transposition pour matmul correct
+            value_transposed = tf.transpose(value, perm=[0, 2, 1])  # [batch, features, timesteps]
+            attention_scores = tf.matmul(query, value_transposed)
+            attention_weights = tf.nn.softmax(attention_scores, axis=-1)
+            return tf.matmul(attention_weights, value)
+            
+        attention_output = Lambda(attention_layer,
+                                output_shape=(None, 1, 256))([query_expanded, x])
+        
+        attention_output = Lambda(lambda x: tf.squeeze(x, axis=1),
+                                output_shape=(None, 256))(attention_output)
         
         # Têtes de sortie
-        output_5m = Dense(2, name='output_5m', dtype='float32')(attention)
-        x_context = concatenate([attention, output_5m])
-        output_10m = Dense(2, name='output_10m', dtype='float32')(x_context)
+        output_5m = Dense(2, name='output_5m')(attention_output)
+        x_context = concatenate([attention_output, output_5m])
+        output_10m = Dense(2, name='output_10m')(x_context)
         x_context = concatenate([x_context, output_10m])
-        output_15m = Dense(2, name='output_15m', dtype='float32')(x_context)
+        output_15m = Dense(2, name='output_15m')(x_context)
         
         model = Model(inputs=inputs, outputs=[output_5m, output_10m, output_15m])
         
@@ -139,6 +154,34 @@ def build_improved_model(input_shape):
             loss_weights={'output_5m': 0.5, 'output_10m': 0.3, 'output_15m': 0.2},
             metrics={'output_5m': ['mae'], 'output_10m': ['mae'], 'output_15m': ['mae']}
         )
+    
+    return model
+def build_simpler_model(input_shape):
+    """Version alternative plus simple avec métriques correctes"""
+    inputs = Input(shape=input_shape)
+    
+    x = Bidirectional(LSTM(128))(inputs)
+    x = Dropout(0.3)(x)
+    
+    output_5m = Dense(2, name='output_5m')(x)
+    output_10m = Dense(2, name='output_10m')(x)
+    output_15m = Dense(2, name='output_15m')(x)
+    
+    model = Model(inputs=inputs, outputs=[output_5m, output_10m, output_15m])
+    
+    model.compile(
+        optimizer=Adam(0.001),
+        loss={
+            'output_5m': 'mse',
+            'output_10m': 'mse',
+            'output_15m': 'mse'
+        },
+        metrics={
+            'output_5m': ['mae'],
+            'output_10m': ['mae'],
+            'output_15m': ['mae']
+        }
+    )
     
     return model
 
@@ -197,7 +240,7 @@ def train_trajectory_model(X, y, output_dir, epochs=50, batch_size=64):
     val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
     
     # Construction et entraînement du modèle
-    model = build_improved_model(X.shape[1:])
+    model = build_simpler_model(X.shape[1:])
     
     print("Début de l'entraînement (silencieux)...")
     history = model.fit(
