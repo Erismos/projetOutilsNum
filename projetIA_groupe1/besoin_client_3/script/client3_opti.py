@@ -12,8 +12,36 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLRO
 import matplotlib.pyplot as plt
 from math import radians, sin, cos, sqrt, atan2
 
+# Configuration GPU
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        # Limiter la mémoire GPU si nécessaire
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+        print(f"{len(gpus)} Physical GPUs, {len(logical_gpus)} Logical GPUs")
+    except RuntimeError as e:
+        print(e)
 def prepare_trajectory_data(csv_path, output_dir, time_horizons=[5, 10, 15]):
-    # Chargement et filtrage initial
+    """Prépare les données de trajectoire pour l'entraînement avec optimisations GPU/CPU
+    
+    Args:
+        csv_path: Chemin vers le fichier CSV source
+        output_dir: Répertoire de sortie pour les scalers
+        time_horizons: List des horizons temporels en minutes
+        
+    Returns:
+        Dict contenant:
+            - X: Séquences d'entrée (n_samples, seq_len, n_features)
+            - y: Cibles pour chaque horizon
+            - feature_names: Noms des features
+    """
+    # ======================================================
+    # SECTION 1: Chargement et filtrage initial
+    # (Peut être parallélisé avec dask/pandas si le fichier est très gros)
+    # ======================================================
+    print("Chargement des données...")
     df = pd.read_csv(csv_path)
     
     # Filtrage géographique du Golfe du Mexique
@@ -26,12 +54,24 @@ def prepare_trajectory_data(csv_path, output_dir, time_horizons=[5, 10, 15]):
     # Filtrer les navires à l'arrêt (SOG < 0.1 noeuds)
     df = df[df['SOG'] > 0.1].copy()
     
-    # Feature engineering avancé
+    # ======================================================
+    # SECTION 2: Feature engineering
+    # (Partie la plus intensive en calcul - à paralléliser)
+    # ======================================================
+    print("Feature engineering...")
     df['dt'] = pd.to_datetime(df['BaseDateTime'])
     df = df.sort_values(['MMSI', 'dt'])
     
     # Calculs différentiels avec vérification de la continuité temporelle
     df['time_diff'] = df.groupby('MMSI')['dt'].diff().dt.total_seconds().fillna(0)
+    
+    # ICI ON PEUT AJOUTER DU PARALLELISME (optionnel)
+    # from joblib import Parallel, delayed
+    # def process_group(group):
+    #     # Faire les calculs différentiels pour un groupe
+    #     return processed_group
+    # results = Parallel(n_jobs=-1)(delayed(process_group)(g) for _, g in df.groupby('MMSI'))
+    # df = pd.concat(results)
     
     # Supprimer les sauts temporels trop longs (> 1 heure)
     df = df[df['time_diff'] <= 3600].copy()
@@ -45,38 +85,50 @@ def prepare_trajectory_data(csv_path, output_dir, time_horizons=[5, 10, 15]):
     df['accel'] = df.groupby('MMSI')['speed'].diff().fillna(0) / (df['time_diff'] + 1e-6)
     df['turn_rate'] = df.groupby('MMSI')['COG'].diff().fillna(0) / (df['time_diff'] + 1e-6)
     
+    # ======================================================
+    # SECTION 3: Préparation des séquences
+    # (Partie critique pour la performance GPU)
+    # ======================================================
+    print("Préparation des séquences...")
+    
     # Filtrer les trajectoires trop courtes (< 20 points)
     traj_lengths = df.groupby('MMSI').size()
     valid_mmsi = traj_lengths[traj_lengths >= 20].index
     df = df[df['MMSI'].isin(valid_mmsi)].copy()
     
-    # Sélection des features
+    # Sélection des features (optimiser pour le GPU)
     feature_cols = [
-        'LAT', 'LON', 'speed', 'COG', 
-        'VesselType', 'Length', 'Width', 'Draft',
-        'time_diff', 'lat_diff', 'lon_diff', 'accel', 'turn_rate'
+        'LAT', 'LON', 'speed', 'COG',         # Position et mouvement
+        'VesselType', 'Length', 'Width',      # Caractéristiques du navire
+        'time_diff', 'lat_diff', 'lon_diff',  # Deltas
+        'accel', 'turn_rate'                  # Dynamique
     ]
     
-    # Création des séquences
-    sequences, targets = [], {f'target_{t}m': [] for t in time_horizons}
+    # Initialisation des conteneurs
+    sequences = []
+    targets = {f'target_{t}m': [] for t in time_horizons}
     
+    # ICI ON PEUT PARALLELISER LE TRAITEMENT DES TRAJECTOIRES
     for mmsi, group in df.groupby('MMSI'):
-        group = group.sort_values('dt')
-        group = group.reset_index(drop=True)
+        group = group.sort_values('dt').reset_index(drop=True)
         
-        # Vérifier que la trajectoire est assez longue après filtrage
+        # Vérifier que la trajectoire est assez longue
         if len(group) < 10 + max(time_horizons):
             continue
             
+        # Préparer les séquences par fenêtre glissante
         for i in range(10, len(group)-max(time_horizons)):
-            # Vérifier que le navire est en mouvement dans la fenêtre actuelle
             current_window = group.iloc[i-10:i]
-            if current_window['speed'].mean() < 0.2:  # 0.2 m/s ~ 0.4 noeuds
+            
+            # Filtrer les fenêtres avec peu de mouvement
+            if current_window['speed'].mean() < 0.2:
                 continue
                 
-            seq = current_window[feature_cols].values
+            # Extraire la séquence (optimisé pour TensorFlow)
+            seq = current_window[feature_cols].values.astype(np.float32)  # float32 pour GPU
             sequences.append(seq)
             
+            # Préparer les cibles pour chaque horizon
             for t in time_horizons:
                 target_idx = min(i + int(t*60/group['time_diff'].mean()), len(group)-1)
                 targets[f'target_{t}m'].append([
@@ -84,29 +136,35 @@ def prepare_trajectory_data(csv_path, output_dir, time_horizons=[5, 10, 15]):
                     group.iloc[target_idx]['LON']
                 ])
     
+    # ======================================================
+    # SECTION 4: Normalisation (critique pour la stabilité GPU)
+    # ======================================================
+    print("Normalisation...")
+    X = np.array(sequences, dtype=np.float32)  # float32 pour GPU
+    
     # Normalisation géographique spécifique
-    X = np.array(sequences)
     lat_scaler = MinMaxScaler(feature_range=(-1, 1))
     lon_scaler = MinMaxScaler(feature_range=(-1, 1))
     
-    # Reshape pour n'avoir qu'une seule feature
+    # Entraînement des scalers sur l'ensemble des données
     lat_scaler.fit(X[:, :, 0].reshape(-1, 1))
     lon_scaler.fit(X[:, :, 1].reshape(-1, 1))
     
-    # Appliquer la transformation
+    # Transformation (optimisée)
     X[:, :, 0] = lat_scaler.transform(X[:, :, 0].reshape(-1, 1)).reshape(X.shape[0], X.shape[1])
     X[:, :, 1] = lon_scaler.transform(X[:, :, 1].reshape(-1, 1)).reshape(X.shape[0], X.shape[1])
     
     # Sauvegarde des scalers
+    os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, 'geo_scalers.pkl'), 'wb') as f:
         pickle.dump({'lat': lat_scaler, 'lon': lon_scaler}, f)
     
-    # Conversion des cibles en arrays numpy
+    # Conversion finale des cibles en numpy (float32 pour GPU)
     for t in time_horizons:
-        targets[f'target_{t}m'] = np.array(targets[f'target_{t}m'])
+        targets[f'target_{t}m'] = np.array(targets[f'target_{t}m'], dtype=np.float32)
     
     return {
-        'X': np.array(sequences),
+        'X': X,  # Déjà en float32
         'y': targets,
         'feature_names': feature_cols
     }
@@ -149,38 +207,44 @@ def build_trajectory_model(input_shape):
 
 from tensorflow.keras.layers import GRU, TimeDistributed, SpatialDropout1D
 from tensorflow.keras.layers import Attention
-
 def build_improved_model(input_shape):
-    inputs = Input(shape=input_shape)
+    # Stratégie de distribution pour multi-GPU
+    strategy = tf.distribute.MirroredStrategy()
     
-    x = BatchNormalization()(inputs)
-    
-    # Couche LSTM avec retour des séquences pour l'attention
-    x = Bidirectional(LSTM(128, return_sequences=True))(x)
-    x = Dropout(0.3)(x)
-    
-    # Mécanisme d'attention
-    query = Dense(128)(x[:, -1, :])  # Utilise le dernier état comme requête
-    query = tf.expand_dims(query, axis=1)
-    
-    attention = Attention()([query, x])
-    attention = tf.squeeze(attention, axis=1)
-    
-    # Têtes de sortie
-    output_5m = Dense(2, name='output_5m')(attention)
-    x_context = concatenate([attention, output_5m])
-    output_10m = Dense(2, name='output_10m')(x_context)
-    x_context = concatenate([x_context, output_10m])
-    output_15m = Dense(2, name='output_15m')(x_context)
-    
-    model = Model(inputs=inputs, outputs=[output_5m, output_10m, output_15m])
-    
-    model.compile(
-        optimizer=Adam(learning_rate=0.0005),
-        loss={'output_5m': 'mse', 'output_10m': 'mse', 'output_15m': 'mse'},
-        loss_weights={'output_5m': 0.5, 'output_10m': 0.3, 'output_15m': 0.2},
-        metrics={'output_5m': ['mae'], 'output_10m': ['mae'], 'output_15m': ['mae']}
-    )
+    with strategy.scope():
+        inputs = Input(shape=input_shape)
+        
+        x = BatchNormalization()(inputs)
+        
+        # Utilisation de CuDNNLSTM si disponible (optimisé pour GPU NVIDIA)
+        x = Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True))(x)
+        x = Dropout(0.3)(x)
+        
+        # Mécanisme d'attention
+        query = Dense(128)(x[:, -1, :])
+        query = tf.expand_dims(query, axis=1)
+        
+        attention = Attention()([query, x])
+        attention = tf.squeeze(attention, axis=1)
+        
+        # Têtes de sortie
+        output_5m = Dense(2, name='output_5m')(attention)
+        x_context = concatenate([attention, output_5m])
+        output_10m = Dense(2, name='output_10m')(x_context)
+        x_context = concatenate([x_context, output_10m])
+        output_15m = Dense(2, name='output_15m')(x_context)
+        
+        model = Model(inputs=inputs, outputs=[output_5m, output_10m, output_15m])
+        
+        # Optimiseur avec gradient accumulation pour les grands batchs
+        opt = Adam(learning_rate=0.0005)
+        
+        model.compile(
+            optimizer=opt,
+            loss={'output_5m': 'mse', 'output_10m': 'mse', 'output_15m': 'mse'},
+            loss_weights={'output_5m': 0.5, 'output_10m': 0.3, 'output_15m': 0.2},
+            metrics={'output_5m': ['mae'], 'output_10m': ['mae'], 'output_15m': ['mae']}
+        )
     
     return model
 
@@ -212,20 +276,38 @@ def train_trajectory_model(X, y, output_dir, epochs=50, batch_size=64):
     # Construction et entraînement
     model = build_trajectory_model(X.shape[1:])
     
+    # Configuration des callbacks optimisés
     callbacks = [
         ModelCheckpoint(
             os.path.join(output_dir, 'best_model.keras'),
             save_best_only=True,
             monitor='val_loss'
         ),
-        EarlyStopping(patience=15, restore_best_weights=True)
+        EarlyStopping(patience=15, restore_best_weights=True),
+        tf.keras.callbacks.TerminateOnNaN(),
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss', factor=0.5, patience=5, min_lr=1e-6
+        )
     ]
     
+    # Options d'entraînement optimisées
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+    
+    # Création du dataset optimisé
+    train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+    train_dataset = train_dataset.with_options(options)
+    train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    
+    val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val))
+    val_dataset = val_dataset.with_options(options)
+    val_dataset = val_dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    
+    # Entraînement
     history = model.fit(
-        X_train, y_train,
-        validation_data=(X_val, y_val),
+        train_dataset,
+        validation_data=val_dataset,
         epochs=epochs,
-        batch_size=batch_size,
         callbacks=callbacks,
         verbose=1
     )
@@ -233,7 +315,17 @@ def train_trajectory_model(X, y, output_dir, epochs=50, batch_size=64):
     model.save(os.path.join(output_dir, 'final_model.keras'))
     return model, X_val, y_val
 
-
+def check_gpu_usage():
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    tf.debugging.set_log_device_placement(True)
+    
+    # Créer des tensors
+    a = tf.constant([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    b = tf.constant([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+    
+    # Exécuter une opération
+    c = tf.matmul(a, b)
+    print(c)
     
 def plot_training_history(history, output_dir):
     """Trace et sauvegarde les courbes d'apprentissage."""
@@ -574,6 +666,14 @@ def verify_data_shapes(data):
 
 
 if __name__ == "__main__":
+    
+    check_gpu_usage()
+    tf.keras.mixed_precision.set_global_policy('mixed_float16')
+    
+    # Configurer le parallélisme des threads
+    tf.config.threading.set_intra_op_parallelism_threads(8)  # Pour les opérations individuelles
+    tf.config.threading.set_inter_op_parallelism_threads(8)  # Pour le parallélisme entre opérations
+    
     # Configuration des chemins
     input_csv = "data/export_IA.csv"
     prepared_data_dir = "prepared_data_trajectory"

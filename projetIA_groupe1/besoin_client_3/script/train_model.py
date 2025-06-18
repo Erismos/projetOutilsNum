@@ -90,7 +90,7 @@ def enhanced_feature_engineering(df, horizon_min=15):
     
     # Moyennes mobiles avec min_periods=1 pour éviter les NaN
     window_size = 3
-    for feat in ['SOG', 'COG', 'Heading']:
+    for feat in ['SOG', 'COG']:
         df[f'{feat}_rolling_mean'] = (df.groupby('MMSI')[feat]
                                      .rolling(window_size, min_periods=1)
                                      .mean()
@@ -102,11 +102,11 @@ def enhanced_feature_engineering(df, horizon_min=15):
     
     # Remplissage des derniers NaN éventuels
     df[['SOG_rolling_mean', 'COG_rolling_mean', 
-        'Heading_rolling_mean', 'SOG_rolling_std',
-        'COG_rolling_std', 'Heading_rolling_std']] = df[
+        'SOG_rolling_std',
+        'COG_rolling_std']] = df[
             ['SOG_rolling_mean', 'COG_rolling_mean', 
-             'Heading_rolling_mean', 'SOG_rolling_std',
-             'COG_rolling_std', 'Heading_rolling_std']
+              'SOG_rolling_std',
+             'COG_rolling_std']
         ].fillna(0)
     
     # Target engineering - décalage futur
