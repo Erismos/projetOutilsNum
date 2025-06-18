@@ -23,6 +23,8 @@ from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.compose import ColumnTransformer
 
 import joblib
+import GPUtil
+
 #from sklearnex import patch_sklearn
 #patch_sklearn()
 
@@ -30,7 +32,7 @@ import joblib
 
 data = pd.read_csv("export_IA.csv")
 
-features = ["SOG", "Length", "Width", "Status", "Cargo"]
+features = ["SOG", "Length", "Width", "Cargo"]
 target = "VesselType"
 
 x = data[features]
@@ -56,29 +58,48 @@ preprocessor.fit(x_train)
 joblib.dump(label_encoder, "label_encoder.joblib")
 joblib.dump(preprocessor, "processor.joblib")
 
+"""import cupy as cp
+from cuml.ensemble import RandomForestClassifier
+
+# Convertir les données en format GPU (cuDF ou CuPy)
+X_train_gpu = cp.array(X_train)
+y_train_gpu = cp.array(y_train)
+
+# Entraînement sur GPU
+model = RandomForestClassifier(n_estimators=100)
+model.fit(X_train_gpu, y_train_gpu)"""
+
 # 2: apprentissage supervisé pour la classification
 
 models = {
-    #'RandomForest': {
-    #    'model': RandomForestClassifier(random_state=42),
-    #    'params': {
-    #        'classifier__n_estimators': [100, 200],
-    #        'classifier__max_depth': [None, 10, 20],
-    #        'classifier__class_weight' : ['balanced', None]
-    #    }
-    #},
-    'XGBoost': {
-        'model': XGBClassifier(
-            tree_method='hist',           # GPU training
-            device='cuda',
-            random_state=42
-        ),
+    'RandomForest': {
+        'model': RandomForestClassifier(random_state=42),
         'params': {
             'classifier__n_estimators': [100, 200],
-            'classifier__learning_rate': [0.01, 0.1],
-            'classifier__max_depth': [3, 6]
+            'classifier__max_depth': [None, 10, 20],
+            'classifier__class_weight' : ['balanced', None]
         }
     },
+    #'XGBoost': {
+    #    'model': XGBClassifier(
+    #        tree_method='gpu_hist',       # GPU-optimisé
+    #        predictor='gpu_predictor',    # GPU pour les prédictions aussi
+    #        gpu_id=0,                     # Assure l'utilisation de la bonne carte
+    #        max_bin=256,                  # Réduit la taille mémoire des histogrammes
+    #        verbosity=1,                  # Verbosité utile pour suivre
+    #        use_label_encoder=False,      # Évite les avertissements
+    #        objective='multi:softmax',    # Si classification multi-classes
+    #        eval_metric='mlogloss',       # Métrique adaptée
+    #        random_state=42
+    #    ),
+    #    'params': {
+    #        'classifier__n_estimators': [200, 300],         # Plus d'arbres pour meilleur fit
+    #        'classifier__learning_rate': [0.05, 0.1],        # Plus stable
+    #        'classifier__max_depth': [4, 6, 8],              # Plus profond = meilleur fit, à tester
+    #        'classifier__subsample': [0.8, 1.0],             # Pour éviter overfitting
+    #        'classifier__colsample_bytree': [0.8, 1.0],      # Idem
+    #    }
+    #},
     #'SVM': {
     #    'model': SVC(random_state=42),
     #    'params': {
@@ -107,6 +128,7 @@ best_accuracy = 0
 
 for name, config in models.items():
     print(f"\n=== Entraînement du modèle {name} ===")
+    GPUtil.showUtilization()
     
     # Création du pipeline complet
     pipeline = Pipeline([
