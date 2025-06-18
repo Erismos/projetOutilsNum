@@ -18,7 +18,7 @@ cv_1 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 data = pd.read_csv("export_IA_old.csv")
 data = data.drop_duplicates(subset=["MMSI"], keep='first')
 
-features = ["Length", "Width", "Draft", "Status", "Cargo"]
+features = ["Length", "Width", "Draft", "Cargo"]
 target = "VesselType"
 
 x = data[features]
