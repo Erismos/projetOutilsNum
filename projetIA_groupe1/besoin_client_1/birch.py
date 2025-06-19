@@ -164,13 +164,31 @@ print("Fichier sauvegardé : export_IA_with_clusters_birch.csv (avec colonnes de
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime']) # on convertit la colonne basedatetime en format datetime
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime']) # on trie le dataframe d'abord par identifiant du bateau et ensuite par date
 
+# Moyennes SOG, COG, Heading par cluster
+cluster_means = df.groupby('Cluster')[['SOG', 'COG', 'Heading']].mean()
+print(cluster_means) # on affiche le tableau des moyennesichier sauvegardé : export_IA_with_clusters_birch.csv (avec colonnes de cluster)
+
+birch_cluster_legend = {
+    0: "rapide, cap vers l'est-sud-est, bien aligné",
+    1: "rapide, cap vers l'est-sud-est, désaligné",
+    2: "quasiment à l'arrêt, cap vers l'est, désaligné",
+    3: "moyennement rapide, cap vers l'ouest-nord-ouest, à peu près aligné",
+    4: "rapide, cap vers le nord-ouest, bien aligné",
+    5: "à l'arrêt, cap vers le nord-ouest, désaligné",
+    6: "très lent, cap vers l'est-sud-est, bien aligné",
+    7: "à l'arrêt, cap vers l'ouest-nord-ouest, bien aligné"
+}
+
+df_sorted['Interprétation'] = df_sorted['Cluster'].map(birch_cluster_legend)
+
 # Visualisation sur carte
 fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
-    color="Cluster",
+    color="Interprétation",
     hover_name="MMSI",
+    hover_data={"Cluster": True},
     zoom=3,
     mapbox_style="open-street-map"
 )

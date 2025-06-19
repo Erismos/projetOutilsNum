@@ -48,14 +48,21 @@ Cette deuxième partie se concentre sur l'analyser les données AIS des navires 
      cd projetIA_groupe1/besoin_client_1
      python3 script_cluster.py
      ```
-
-4. **À rentrer dans la console** :
-   - SOG (vitesse)
-   - COG (cap)
-   - Heading (orientation)
-
-5. **Résultats générés** :
-   Le cluster auquel appartient le navire des coordonnées rentrées
+## Script principal script_cluster.py
+* **Chargement du modèle et du scaler**
+    Le script charge un modèle KMeans sauvegardé (kmeans_model.pkl) ainsi que le scaler associé (scaler_kmeans.pkl), qui a servi à normaliser les données pendant l’entraînement.
+* **Entrée utilisateur**
+    Le script demande à l’utilisateur de saisir :
+        SOG (Speed Over Ground) → vitesse en nœuds
+        COG (Course Over Ground) → cap en degrés (0–360°)
+        Heading → direction de la proue du navire (en degrés)
+* **Prétraitement**
+    Les données entrées sont regroupées en un tableau unique.
+    Elles sont normalisées avec le scaler chargé pour correspondre à l’espace de travail du modèle.
+* **Prédiction du cluster**
+    Le modèle KMeans prédit le cluster du navire selon son comportement.
+* **Affichage du résultat**
+    Le numéro du cluster est affiché.
 ---
 
 ## Structure du dossier besoin_client_1

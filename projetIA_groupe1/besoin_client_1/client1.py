@@ -23,6 +23,9 @@ corr_matrix = vars_corr.corr()
 # Affichage du tableau dans la console
 print(" Matrice de corrélation (SOG, COG, Heading, LAT, LON) :\n")
 print(corr_matrix.round(2))
+# description des données
+description = df[["SOG", "COG", "Heading"]].describe()
+print(description)
 
 # on fait un échantillonage pour trouver le nombre de clusters k
 # on prend 10% des données 
@@ -190,13 +193,31 @@ print("Fichier sauvegardé : export_IA_with_clusters_kmeans.csv (avec colonnes d
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime']) # on convertit la colonne basedatetime en format datetime
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime']) # on trie le dataframe d'abord par identifiant du bateau et ensuite par date
 
+# Moyennes SOG, COG, Heading par cluster
+cluster_means = df.groupby('Cluster')[['SOG', 'COG', 'Heading']].mean()
+print(cluster_means) # on affiche le tableau des moyennes
+
+cluster_legend = {
+    0: "à l'arrêt ou très lent, cap vers l'ouest, non aligné",
+    1: "à l'arrêt ou très lent, cap vers le sud, non aligné",
+    2: "rapide, cap vers l'ouest, aligné",
+    3: "à l'arrêt ou très lent, cap vers l'ouest, aligné",
+    4: "rapide, cap vers l'est, aligné",
+    5: "à l'arrêt ou très lent, cap vers l'est, non aligné",
+    6: "à l'arrêt ou très lent, cap vers l'ouest, aligné",
+    7: "à l'arrêt ou très lent, cap vers l'est, aligné"
+}
+
+df_sorted['Interprétation'] = df_sorted['Cluster'].map(cluster_legend)
+
 # Visualisation sur carte 
 fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
-    color="Cluster",
+    color="Interprétation",
     hover_name="MMSI",
+    hover_data={"Cluster": True},
     zoom=3,
     mapbox_style="open-street-map"
 )
