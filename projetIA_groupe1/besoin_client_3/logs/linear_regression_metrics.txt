@@ -1,11 +1,11 @@
-Score R²: 0.0004
+Score R²: 0.2770
 Erreur quadratique moyenne: 0.00
 
 Erreurs géographiques:
-- Moyenne: 370.03 mètres
-- Premier quartile: 144.51 mètres
-- Médiane: 199.58 mètres
-- Troisième quartile: 282.24 mètres
-- 90 quartile: 386.73 mètres
-- Minimum: 2.50 mètres
-- Maximum: 1115996.23 mètres
+- Moyenne: 226.79 mètres
+- Premier quartile: 63.65 mètres
+- Médiane: 120.42 mètres
+- Troisième quartile: 238.97 mètres
+- 90 quartile: 362.26 mètres
+- Minimum: 0.36 mètres
+- Maximum: 27558.55 mètres

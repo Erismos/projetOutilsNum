@@ -3,15 +3,12 @@
 import argparse
 import joblib
 import pandas as pd
-import numpy as np
-from sklearn.preprocessing import StandardScaler
 
-# Chargement des modèles
+# Chargement des objets sérialisés
 try:
-    preprocessor = joblib.load('processor.joblib')
-    label_ecoder = joblib.load('label_encoder.joblib')
-    model = joblib.load('best_model.joblib')
-    print("good")
+    label_encoder = joblib.load('label_encoder.joblib')  # Pour décoder la sortie
+    model = joblib.load('best_model.joblib')             # Pipeline complet (prétraitement + modèle)
+    print("Modèle chargé avec succès.")
 except FileNotFoundError as e:
     print(f"Erreur: Fichier modèle manquant - {e}")
     exit(1)
@@ -27,28 +24,26 @@ def predict_vessel_type(input_data):
         return None
 
 def main():
-    # Configuration des arguments CLI
+    # Lecture des arguments
     parser = argparse.ArgumentParser(description='Prédiction du type de navire')
     parser.add_argument('--SOG', type=float, required=True, help='Speed Over Ground (0-30)')
     parser.add_argument('--Length', type=float, required=True, help='Longueur du navire (mètres)')
-    parser.add_argument('--Draft', type=float, required=True, help='Tirant d\'eau (mètres)')
     parser.add_argument('--Width', type=float, required=True, help='Largeur du navire (mètres)')
     parser.add_argument('--Cargo', type=int, required=True, help='Type de cargaison (code numérique)')
 
     args = parser.parse_args()
+    input_data = vars(args)
 
-    # Prédiction
-    prediction = predict_vessel_type(vars(args))
-    
+    prediction = predict_vessel_type(input_data)
+
     if prediction is not None:
-        vessel_type = vessel_types.get(prediction, "Inconnu")
-        print(f"\nRésultat de prédiction:")
-        print(f"- Type de navire: {vessel_type} (Code: {prediction})")
-        print("\nCaractéristiques analysées:")
-        for k, v in vars(args).items():
-            print(f"- {k}: {v}")
+        print(f"\nRésultat de prédiction :")
+        print(f"- Code type de navire prédit : {prediction}")
+        print("\nDonnées d'entrée :")
+        for k, v in input_data.items():
+            print(f"  - {k}: {v}")
     else:
-        print("La prédiction a échoué")
+        print("La prédiction a échoué.")
 
 if __name__ == "__main__":
     main()
