@@ -241,7 +241,7 @@ end_time = time.time() # on stop le timer
 elapsed_time = end_time - start_time # on calcul le temps avec la différence entre le temps de fin et de début 
 print(f"\n Temps d'exécution total : {elapsed_time:.2f} secondes") # on affiche le temps d'exécution du script
 
-# Ce script entraîne un modèle de clustering KMeans basé sur les caractéristiques de navigation (SOG, COG, Heading). Il teste différents nombres de clusters, sélectionne automatiquement le meilleur (k), applique le clustering à tout le dataset, produit une visualisation géographique et enregistre le modèle entraîné.c
+# Ce script entraîne un modèle de clustering KMeans basé sur les caractéristiques de navigation (SOG, COG, Heading). Il teste différents nombres de clusters, sélectionne automatiquement le meilleur (k), applique le clustering à tout le dataset, produit une visualisation géographique et enregistre le modèle entraîné
 
 # dans chaque cluster il y a plusieurs bateaux car ils ont le même schéma de navigation (sog; heading; cog).
 # les couleurs sur la carte sont les différents clusters 

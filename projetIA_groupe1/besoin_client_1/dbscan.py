@@ -161,6 +161,12 @@ fig.write_html("carte/trajectoires_clusters_dbscan.html") # on sauvegarde la car
 fig.show() # on affiche la carte
 print("Carte enregistrée dans trajectoires_clusters_dbscan.html")
 
+print("\nRésumé des métriques pour le meilleur DBSCAN :")
+print(f"Silhouette Score : {best_result['silhouette']:.4f}")
+print(f"Calinski-Harabasz Index : {best_result['calinski_harabasz']:.2f}")
+print(f"Davies-Bouldin Index : {best_result['davies_bouldin']:.4f}")
+print(f"Nombre de clusters détectés (hors bruit) : {int(best_result['n_clusters'])}")
+
 # Sauvegarde du modèle et du scaler
 joblib.dump(dbscan_final, "pkl/dbscan_model.pkl") # on sauvegarde le modèle dbscan entrainé
 joblib.dump(scaler_sample, "pkl/scaler_dbscan.pkl") # on sauvegarde le scaler entrainé

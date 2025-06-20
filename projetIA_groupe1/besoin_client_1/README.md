@@ -6,16 +6,6 @@
 >**Auteurs** : [Laure Warlop](https://github.com/wrlp), [Gabriel Boucneau](https://github.com/Nectolyt), [Auvray Clément](https://github.com/Erismos)  
 **Date** : Juin 2025
 
-## Sommaire
-- [Objectif](#objectif)
-- [Installation et Exécution](#installation-et-exécution)
-- [Structure du dossier besoin_client_1](#structure-du-dossier-besoin_client_1)
-- [Objectif du besoin_client_1](#objectif-du-besoin_client_1)
-- [Méthodes utilisées](#méthodes-utilisées)
-- [Entraînement des modèles](#pour-entraîner-chaque-modèle)
-- [Étapes du besoin client 1](#besoin-client-1---visualisation-sur-carte)
-- [Livrables](#livrable-de-besoin_client_1)
-
 ---
 ## Objectif
 
