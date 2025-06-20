@@ -133,13 +133,26 @@ print("Fichier sauvegardé : export_IA_with_clusters_dbscan.csv")
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime']) # on covertit les données en format de datetime
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime']) # on trie les données par leur identifiant de bateau et date
  
+# Moyennes SOG, COG, Heading par cluster
+cluster_means = df.groupby('Cluster')[['SOG', 'COG', 'Heading']].mean()
+print(cluster_means) # on affiche le tableau des moyennesichier sauvegardé : export_IA_with_clusters_birch.csv (avec colonnes de cluster)
+
+dbscan_cluster_legend = {
+    -1.0: "bruit : navire très rapide cap au nord-nord-ouest",
+    0.0: "vitesse modérée, cap vers le sud-ouest, bien aligné",
+    1.0: "lent, cap vers l'ouest-sud-ouest, désaligné"
+}
+
+df_sorted['Interprétation'] = df_sorted['Cluster'].map(dbscan_cluster_legend)
+
 # Création d'une carte interactive avec Plotly
 fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
-    color="Cluster",
+    color="Interprétation",
     hover_name="MMSI",
+    hover_data={"Cluster": True},
     zoom=3,
     mapbox_style="open-street-map"
 )

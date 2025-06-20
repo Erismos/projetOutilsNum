@@ -29,6 +29,12 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBRegressor
+from sklearn.svm import SVR
+
 
 
 
@@ -133,12 +139,19 @@ def train_model(X_train: pd.DataFrame, y_train: pd.DataFrame,
                 model_type: str = 'random_forest', 
                 save_path: str = 'models/trained_model.pkl') -> object:
     """
-    Entraîne un modèle de prédiction de trajectoire.
+    Entraîne un modèle de prédiction de trajectoire avec normalisation si nécessaire.
 
     Args:
         X_train (pd.DataFrame): Features d'entraînement
         y_train (pd.DataFrame): Cibles d'entraînement
-        model_type (str): Type de modèle à entraîner ('random_forest' par défaut)
+        model_type (str): Type de modèle à entraîner parmi :
+            - 'random_forest'
+            - 'gradient_boosting'
+            - 'knn'
+            - 'linear_regression'
+            - 'ridge'
+            - 'xgboost'
+            - 'svr'
         save_path (str): Chemin pour sauvegarder le modèle entraîné
 
     Returns:
@@ -147,28 +160,76 @@ def train_model(X_train: pd.DataFrame, y_train: pd.DataFrame,
     Raises:
         ValueError: Si le type de modèle n'est pas reconnu
     """
-    print(f"\nEntraînement d'un modèle {model_type}...")
-    
+
+    # Choix du modèle
     if model_type == 'random_forest':
         model = RandomForestRegressor(n_estimators=100, random_state=42)
-    # Ajouter ici d'autres types de modèles si nécessaire
-    # elif model_type == 'gradient_boosting':
-    #     model = GradientBoostingRegressor()
+        use_scaler = False
+    elif model_type == 'gradient_boosting':
+        model = MultiOutputRegressor(GradientBoostingRegressor(n_estimators=100, random_state=42))
+        use_scaler = False
+    elif model_type == 'knn':
+        model = KNeighborsRegressor(n_neighbors=5)
+        use_scaler = True
+    elif model_type == 'linear_regression':
+        model = LinearRegression()
+        use_scaler = True
+    elif model_type == 'ridge':
+        model = Ridge(alpha=1.0)
+        use_scaler = True
+    elif model_type == 'xgboost':
+        model = MultiOutputRegressor(XGBRegressor(objective='reg:squarederror', random_state=42))
+        use_scaler = False
+    elif model_type == 'svr':
+        model = MultiOutputRegressor(SVR(kernel='rbf'))
+        use_scaler = True
     else:
         raise ValueError(f"Type de modèle non supporté: {model_type}")
 
-    # Entraînement du modèle
-    model.fit(X_train, y_train)
+    # Pipeline avec scaler si nécessaire
+    if use_scaler:
+        pipeline = Pipeline([
+            ('scaler', StandardScaler()),
+            ('regressor', model)
+        ])
+    else:
+        pipeline = model
+
+    # Entraînement
+    pipeline.fit(X_train, y_train)
     print("Entraînement terminé.")
 
-    # Sauvegarde du modèle
+    # Sauvegarde
     if save_path:
-        joblib.dump(model, save_path)
+        joblib.dump(pipeline, save_path)
         print(f"Modèle sauvegardé sous {save_path}")
 
-    return model
+    return pipeline
 
-def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame) -> dict:
+def save_metrics_to_txt(metrics, filepath):
+    result_text = (
+        f"Score R²: {metrics['r2_score']:.4f}\n"
+        f"Erreur quadratique moyenne: {metrics['mean_squared_error']:.2f}\n\n"
+        "Erreurs géographiques:\n"
+        f"- Moyenne: {metrics['mean_geo_error']:.2f} mètres\n"
+        f"- Premier quartile: {metrics['q1_geo_error']:.2f} mètres\n"
+        f"- Médiane: {metrics['median_geo_error']:.2f} mètres\n"
+        f"- Troisième quartile: {metrics['q3_geo_error']:.2f} mètres\n"
+        f"- 90 quartile: {metrics['q90_geo_error']:.2f} mètres\n"
+        f"- Minimum: {metrics['min_geo_error']:.2f} mètres\n"
+        f"- Maximum: {metrics['max_geo_error']:.2f} mètres\n"
+    )
+
+    # Affichage dans la console
+    print(result_text)
+
+    # Sauvegarde dans un fichier texte
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(result_text)
+
+    print(f"Résultats sauvegardés dans {filepath}")
+
+def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame, model_type: str) -> dict:
     """
     Évalue les performances d'un modèle entraîné.
 
@@ -195,8 +256,9 @@ def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame) ->
     
     # Calcul des quartiles
     q1 = np.percentile(errors, 25)
-    median = np.median(errors)  # déjà calculé
+    median = np.median(errors)
     q3 = np.percentile(errors, 75)
+    q90 = np.percentile(errors, 90)
     
     # Compilation des résultats
     metrics = {
@@ -207,25 +269,28 @@ def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame) ->
         'min_geo_error': errors.min(),
         'max_geo_error': errors.max(),
         'q1_geo_error': q1,
-        'q3_geo_error': q3
+        'q3_geo_error': q3,
+        'q90_geo_error': q90
     }
 
     
     # Affichage des résultats
-    print(f"Score R²: {metrics['r2_score']:.4f}")
-    print(f"Erreur quadratique moyenne: {metrics['mean_squared_error']:.2f}")
-    print("\nErreurs géographiques:")
-    print(f"- Moyenne: {metrics['mean_geo_error']:.2f} mètres")
-    print(f"- Premier quartile: {metrics['q1_geo_error']:.2f} mètres")
-    print(f"- Médiane: {metrics['median_geo_error']:.2f} mètres")
-    print(f"- Troisième quartile: {metrics['q3_geo_error']:.2f} mètres")
-    print(f"- Minimum: {metrics['min_geo_error']:.2f} mètres")
-    print(f"- Maximum: {metrics['max_geo_error']:.2f} mètres")
+    # print(f"Score R²: {metrics['r2_score']:.4f}")
+    # print(f"Erreur quadratique moyenne: {metrics['mean_squared_error']:.2f}")
+    # print("\nErreurs géographiques:")
+    # print(f"- Moyenne: {metrics['mean_geo_error']:.2f} mètres")
+    # print(f"- Premier quartile: {metrics['q1_geo_error']:.2f} mètres")
+    # print(f"- Médiane: {metrics['median_geo_error']:.2f} mètres")
+    # print(f"- Troisième quartile: {metrics['q3_geo_error']:.2f} mètres")
+    # print(f"- 90 quartile: {metrics['q90_geo_error']:.2f} mètres")
+    # print(f"- Minimum: {metrics['min_geo_error']:.2f} mètres")
+    # print(f"- Maximum: {metrics['max_geo_error']:.2f} mètres")
     
+    save_metrics_to_txt(metrics, f'logs/{model_type}metrics.txt')
     
     return metrics
 
-def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarray, mmsi_test: pd.Series) -> None:
+def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarray, mmsi_test: pd.Series, filename: str) -> None:
     """
     Visualise les trajets réels et prédits par MMSI.
 
@@ -237,11 +302,11 @@ def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarr
     """
 
     # Histogramme des erreurs
-    plt.hist(errors, bins=50, edgecolor='k')
-    plt.xlabel("Erreur (mètres)")
-    plt.ylabel("Nombre d'exemples")
-    plt.title("Distribution des erreurs de position")
-    plt.show()
+    # plt.hist(errors, bins=50, edgecolor='k')
+    # plt.xlabel("Erreur (mètres)")
+    # plt.ylabel("Nombre d'exemples")
+    # plt.title("Distribution des erreurs de position")
+    # plt.show()
 
     # Création de la carte centrée
     map_center = [y_test["LAT_next"].mean(), y_test["LON_next"].mean()]
@@ -254,7 +319,7 @@ def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarr
     full_df["MMSI"] = mmsi_test.values
 
     # Sélection d'un petit nombre de MMSI pour affichage (ex: 5 premiers)
-    unique_mmsi = full_df["MMSI"].unique()[:50]
+    unique_mmsi = full_df["MMSI"].unique()[:142]
 
     for mmsi in unique_mmsi:
         df_ship = full_df[full_df["MMSI"] == mmsi].sort_index()
@@ -281,51 +346,22 @@ def visualize_results(errors: np.ndarray, y_test: pd.DataFrame, y_pred: np.ndarr
                       popup=f"Arrivée prédite MMSI {mmsi}").add_to(m)
 
     # Sauvegarde
-    m.save("predictions_map.html")
+    m.save(f"maps/{filename}_map.html")
     print("Carte enregistrée sous 'predictions_map.html'.")
 
 
     
-    
-"""TODO
-
-model = GradientBoostingRegressor()
-model.fit(X_train, y_train)
-
-model = MultiOutputRegressor(GradientBoostingRegressor())
-
-model = KNeighborsRegressor(n_neighbors=5)
-model.fit(X_train, y_train)
-
-from sklearn.linear_model import LinearRegression
-model = LinearRegression()
-
-from sklearn.linear_model import Ridge
-model = Ridge(alpha=1.0)
-
-from xgboost import XGBRegressor
-from sklearn.multioutput import MultiOutputRegressor
-
-model = MultiOutputRegressor(XGBRegressor())
-model.fit(X_train, y_train)
-
-from sklearn.svm import SVR
-from sklearn.multioutput import MultiOutputRegressor
-
-model = MultiOutputRegressor(SVR(kernel='rbf'))
-
-"""
 
 if __name__ == "__main__":
     # # 1. Préparation des données
     print("Préparation des données...")
-    # df = prepare_data()
-    # df.to_csv('data/prepared_data.csv', index=False)
+    df = prepare_data()
+    df.to_csv('data/prepared_data.csv', index=False)
     
     df = pd.read_csv("data/prepared_data.csv")
-    print(df.head(50))
+    # print(df.head(50))
     # # 2. Sélection des features et target
-    features = ["LAT", "LON", "SOG", "hour", "dir_x", "dir_x",
+    features = ["LAT", "LON", "SOG", "hour", "dir_x", "dir_y",
                 "hour_sin", "hour_cos", "delta_t", "is_stopped", "weekday", 
                 "VesselType", "timestamp"]
     X = df[features]
@@ -339,23 +375,21 @@ if __name__ == "__main__":
     )
     
     # 4. Entraînement du modèle
-    # model = train_model(
-    #     X_train, y_train,
-    #     model_type='random_forest',
-    #     save_path='models/random_forest_model.pkl'
-    # )
+    for model_type in ['random_forest', 'gradient_boosting', 'knn', 'linear_regression', 'ridge', 'xgboost', 'svr']:
+        print(f"\nEntraînement du modèle {model_type}...")
+        model = train_model(
+            X_train, y_train,
+            model_type=model_type,
+            save_path=f'models/{model_type}_model.pkl'
+        )
     
-    model = joblib.load('models/random_forest_model.pkl')
-    # 5. Évaluation du modèle
-    metrics = evaluate_model(model, X_test, y_test)
-    
-    # 6. Visualisation des résultats
-    y_pred = model.predict(X_test)
-    errors = haversine(y_test["LAT_next"], y_test["LON_next"], y_pred[:, 0], y_pred[:, 1])
-    visualize_results(errors, y_test, y_pred, X_meta_test["MMSI"])
-
-
-
-
+        # model = joblib.load('models/random_forest_model.pkl')
+        # 5. Évaluation du modèle
+        metrics = evaluate_model(model, X_test, y_test, model_type)
+        
+        # 6. Visualisation des résultats
+        y_pred = model.predict(X_test)
+        errors = haversine(y_test["LAT_next"], y_test["LON_next"], y_pred[:, 0], y_pred[:, 1])
+        visualize_results(errors, y_test, y_pred, X_meta_test["MMSI"], f"{model_type}_predictions")
 
 
