@@ -11,10 +11,8 @@ from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKF
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer  # 🆕
 
-cv_1 = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-
-# 1: pré traitement des données 
 data = pd.read_csv("export_IA_old.csv")
 data = data.drop_duplicates(subset=["MMSI"], keep='first')
 
@@ -24,79 +22,75 @@ target = "VesselType"
 x = data[features]
 y = data[target]
 
+# Label encoding
 label_encoder = LabelEncoder()
 y_encoded = label_encoder.fit_transform(y)
 
-# garder seulement les classes avec au moins 2 exemples
+# Supprimer classes rares (<2 instances)
 from collections import Counter
 counter = Counter(y_encoded)
 classes_to_keep = [cls for cls, count in counter.items() if count >= 2]
-
 mask = np.isin(y_encoded, classes_to_keep)
 x = x[mask]
 y_encoded = y_encoded[mask]
 
-label_encoder = LabelEncoder()
-y_encoded = label_encoder.fit_transform(y_encoded)
+# Re-encoder après filtrage
+y_encoded = LabelEncoder().fit_transform(y_encoded)
 
+# Split stratifié
 x_train, x_test, y_train, y_test = train_test_split(
-    x, y_encoded, test_size=0.2, random_state=42
+    x, y_encoded, test_size=0.2, stratify=y_encoded, random_state=42
 )
 
-print("Toutes classes :", np.unique(y_encoded))
-print("Classes dans y_train :", np.unique(y_train))
-
-numeric = ["Length", "Width", "Draft"]
-numeric_transformer = Pipeline(steps=[('scaler', StandardScaler())])
-
+# Preprocessing
+numeric = ["Length", "Width", "Draft", "Cargo"]  # inclure toutes les features
+numeric_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
 preprocessor = ColumnTransformer(
-    transformers=[
-        ('num', numeric_transformer, numeric)
-    ]
+    transformers=[('num', numeric_transformer, numeric)]
 )
-
 preprocessor.fit(x_train)
 
+# Sauvegarde
 joblib.dump(label_encoder, "label_encoder.joblib")
 joblib.dump(preprocessor, "processor.joblib")
 
-# 2: apprentissage supervisé pour la classification
+# Modèles
 models = {
     'RandomForest': {
-        'model': RandomForestClassifier(random_state=42),
+        'model': RandomForestClassifier(random_state=42, class_weight='balanced'),
         'params': {
-            'classifier__n_estimators': [100, 200],
-            'classifier__max_depth': [None, 10, 20],
-            'classifier__class_weight': ['balanced', None]
+            'classifier__n_estimators': [100, 150],
+            'classifier__max_depth': [None, 10, 20]
         }
     },
-    #'XGBoost': {
-    #    'model': XGBClassifier(
-    #        tree_method='hist',
-    #        device='gpu',
-    #        predictor='gpu_predictor',
-    #        gpu_id=0,
-    #        max_bin=256,
-    #        verbosity=1,
-    #        use_label_encoder=False,
-    #        objective='multi:softmax',
-    #        eval_metric='mlogloss',
-    #        random_state=42
-    #    ),
-    #    'params': {
-    #        'classifier__n_estimators': [200, 300],
-    #        'classifier__learning_rate': [0.05, 0.1],
-    #        'classifier__max_depth': [4, 6, 8],
-    #        'classifier__subsample': [0.8, 1.0],
-    #        'classifier__colsample_bytree': [0.8, 1.0],
-    #    }
-    #},
+    'XGBoost': {
+        'model': XGBClassifier(
+            tree_method='hist',          # reste rapide en CPU
+            max_bin=256,
+            verbosity=1,
+            objective='multi:softmax',
+            eval_metric='mlogloss',
+            random_state=42
+        ),
+        'params': {
+            'classifier__n_estimators': [100, 200],
+            'classifier__learning_rate': [0.05, 0.1],
+            'classifier__max_depth': [4, 6],
+            'classifier__subsample': [0.8, 1.0],
+            'classifier__colsample_bytree': [0.8, 1.0],
+        }
+    }
 }
 
+cv_1 = StratifiedKFold(n_splits=7, shuffle=True, random_state=42)
 results = []
-best_accuracy = 0
 best_model = None
+best_accuracy = 0
 
+# Entraînement
 for name, config in models.items():
     print(f"\n=== Entraînement du modèle {name} ===")
 
@@ -114,34 +108,32 @@ for name, config in models.items():
         verbose=1
     )
 
-    grid.fit(x_train, y_train)  # PAS de double encodage ici
-
+    grid.fit(x_train, y_train)
     y_pred = grid.predict(x_test)
-    y_test_original = label_encoder.inverse_transform(y_test)
-    y_pred_original = label_encoder.inverse_transform(y_pred)
 
-    test_accuracy = accuracy_score(y_test_original, y_pred_original)
+    acc_test = accuracy_score(y_test, y_pred)
 
     results.append({
         'model': name,
         'best_params': grid.best_params_,
         'train_accuracy': grid.best_score_,
-        'test_accuracy': test_accuracy,
+        'test_accuracy': acc_test,
         'model_object': grid.best_estimator_
     })
 
-    if test_accuracy > best_accuracy:
-        best_accuracy = test_accuracy
+    if acc_test > best_accuracy:
+        best_accuracy = acc_test
         best_model = grid.best_estimator_
 
     print(f"Meilleurs paramètres: {grid.best_params_}")
     print(f"Accuracy (train): {grid.best_score_:.4f}")
-    print(f"Accuracy (test): {test_accuracy:.4f}")
-    print("Rapport de classification (labels originaux):\n", classification_report(y_test_original, y_pred_original))
+    print(f"Accuracy (test): {acc_test:.4f}")
+    print("Rapport de classification :\n", classification_report(y_test, y_pred))
 
-    cm = confusion_matrix(y_test_original, y_pred_original, labels=label_encoder.classes_)
+    # Matrice de confusion
+    cm = confusion_matrix(y_test, y_pred)
     plt.figure(figsize=(10, 8))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
     plt.title(f'Matrice de confusion - {name}')
     plt.ylabel('Vraie classe')
     plt.xlabel('Classe prédite')
@@ -149,12 +141,11 @@ for name, config in models.items():
     plt.savefig(f'confusion_matrix_{name}.png')
     plt.show()
 
-# Résumé des résultats
-print("\n=== Comparaison des modèles ===")
+# Résumé
 results_df = pd.DataFrame(results).sort_values('test_accuracy', ascending=False)
+print("\n=== Comparaison des modèles ===")
 print(results_df[['model', 'train_accuracy', 'test_accuracy']].to_string(index=False))
 
-# Sauvegarde du meilleur modèle
 if best_model is not None:
     joblib.dump(best_model, 'best_model.joblib')
     print(f"\nMeilleur modèle sauvegardé: {results_df.iloc[0]['model']}")

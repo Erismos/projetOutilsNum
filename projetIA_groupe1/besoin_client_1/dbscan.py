@@ -133,13 +133,26 @@ print("Fichier sauvegardé : export_IA_with_clusters_dbscan.csv")
 df['BaseDateTime'] = pd.to_datetime(df['BaseDateTime']) # on covertit les données en format de datetime
 df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime']) # on trie les données par leur identifiant de bateau et date
  
+# Moyennes SOG, COG, Heading par cluster
+cluster_means = df.groupby('Cluster')[['SOG', 'COG', 'Heading']].mean()
+print(cluster_means) # on affiche le tableau des moyennesichier sauvegardé : export_IA_with_clusters_birch.csv (avec colonnes de cluster)
+
+dbscan_cluster_legend = {
+    -1.0: "bruit : navire très rapide cap au nord-nord-ouest",
+    0.0: "vitesse modérée, cap vers le sud-ouest, bien aligné",
+    1.0: "lent, cap vers l'ouest-sud-ouest, désaligné"
+}
+
+df_sorted['Interprétation'] = df_sorted['Cluster'].map(dbscan_cluster_legend)
+
 # Création d'une carte interactive avec Plotly
 fig = px.scatter_mapbox(
     df_sorted,
     lat="LAT",
     lon="LON",
-    color="Cluster",
+    color="Interprétation",
     hover_name="MMSI",
+    hover_data={"Cluster": True},
     zoom=3,
     mapbox_style="open-street-map"
 )
@@ -147,6 +160,12 @@ fig.update_layout(title="Trajectoires des navires par cluster - DBSCAN ")
 fig.write_html("carte/trajectoires_clusters_dbscan.html") # on sauvegarde la carte dans un fichier html
 fig.show() # on affiche la carte
 print("Carte enregistrée dans trajectoires_clusters_dbscan.html")
+
+print("\nRésumé des métriques pour le meilleur DBSCAN :")
+print(f"Silhouette Score : {best_result['silhouette']:.4f}")
+print(f"Calinski-Harabasz Index : {best_result['calinski_harabasz']:.2f}")
+print(f"Davies-Bouldin Index : {best_result['davies_bouldin']:.4f}")
+print(f"Nombre de clusters détectés (hors bruit) : {int(best_result['n_clusters'])}")
 
 # Sauvegarde du modèle et du scaler
 joblib.dump(dbscan_final, "pkl/dbscan_model.pkl") # on sauvegarde le modèle dbscan entrainé
