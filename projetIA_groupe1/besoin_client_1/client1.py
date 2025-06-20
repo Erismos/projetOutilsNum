@@ -96,7 +96,7 @@ avg_scores_df = results_df.groupby('k')[['silhouette', 'calinski_harabasz', 'dav
 avg_scores_df.to_csv("csv/kmeans_metrics.csv", index=False) # on enregistre les résultats dans un fichier csv
 
 # Affichage des scores / visualisation
-fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(8, 12), sharex=True)
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12, 6), sharex=True)
 
 # 1. Silhouette
 axes[0].plot(avg_scores_df['k'], avg_scores_df['silhouette'], color='tab:blue', marker='o') # score silhouette moyen en focntion de k
