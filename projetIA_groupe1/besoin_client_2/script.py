@@ -4,10 +4,10 @@ import argparse
 import joblib
 import pandas as pd
 
-# Chargement des objets sérialisés
+# chargement des objets sérialisés
 try:
-    label_encoder = joblib.load('label_encoder.joblib')  # Pour décoder la sortie
-    model = joblib.load('best_model.joblib')             # Pipeline complet (prétraitement + modèle)
+    label_encoder = joblib.load('label_encoder.joblib') # pour décoder la sortie
+    model = joblib.load('best_model.joblib') # pipeline complet (prétraitement + modèle)
     print("Modèle chargé avec succès.")
 except FileNotFoundError as e:
     print(f"Erreur: Fichier modèle manquant - {e}")
@@ -24,7 +24,7 @@ def predict_vessel_type(input_data):
         return None
 
 def main():
-    # Lecture des arguments
+    # lecture des arguments
     parser = argparse.ArgumentParser(description='Prédiction du type de navire')
     parser.add_argument('--Length', type=float, required=True, help='Longueur du navire (mètres)')
     parser.add_argument('--Draft', type=float, required=True, help='Tirant d\'eau (mètres)')
