@@ -26,8 +26,8 @@ def predict_vessel_type(input_data):
 def main():
     # Lecture des arguments
     parser = argparse.ArgumentParser(description='Prédiction du type de navire')
-    parser.add_argument('--SOG', type=float, required=True, help='Speed Over Ground (0-30)')
     parser.add_argument('--Length', type=float, required=True, help='Longueur du navire (mètres)')
+    parser.add_argument('--Draft', type=float, required=True, help='Tirant d\'eau (mètres)')
     parser.add_argument('--Width', type=float, required=True, help='Largeur du navire (mètres)')
     parser.add_argument('--Cargo', type=int, required=True, help='Type de cargaison (code numérique)')
 
