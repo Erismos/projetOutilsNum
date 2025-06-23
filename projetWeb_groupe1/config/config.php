@@ -1,1 +1,0 @@
-<!-- Paramètres de connexion à la base de données, constantes globales -->
