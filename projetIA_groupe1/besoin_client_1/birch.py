@@ -67,7 +67,7 @@ avg_scores_df = results_df.groupby('k')[['silhouette', 'calinski_harabasz', 'dav
 avg_scores_df.to_csv("csv/birch_metrics.csv", index=False) # on enregistre les résultats dans un fichier csv
 
 # Affichage des scores / visualisation
-fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(8, 12), sharex=True)
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(12, 6), sharex=True)
 
 # 1. Silhouette
 axes[0].plot(avg_scores_df['k'], avg_scores_df['silhouette'], color='tab:blue', marker='o') # score silhouette moyen en focntion de k
@@ -212,4 +212,5 @@ end_time = time.time() # on stop le timer
 elapsed_time = end_time - start_time # on calcul le temps avec la différence entre le temps de fin et de début 
 print(f"\n Temps d'exécution total : {elapsed_time:.2f} secondes")  # on affiche le temps d'exécution du script
 
-# Ce script entraîne un modèle de clustering Birch basé sur les caractéristiques de navigation (SOG, COG, Heading). Il teste différents nombres de clusters, sélectionne automatiquement le meilleur (k), applique le clustering à tout le dataset, produit une visualisation géographique et enregistre le modèle entraîné.c
+# Ce script entraîne un modèle de clustering Birch basé sur les caractéristiques de navigation (SOG, COG, Heading). 
+# Il teste différents nombres de clusters, sélectionne automatiquement le meilleur (k), applique le clustering à tout le dataset, produit une visualisation géographique et enregistre le modèle entraîné

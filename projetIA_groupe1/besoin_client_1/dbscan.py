@@ -126,7 +126,7 @@ clusters = dbscan_final.fit_predict(X_sample_scaled)
 
 # Ajout des clusters dans le dataframe original
 df.loc[X_sample.index, 'Cluster'] = clusters
-df.to_csv("csv/export_IA_with_clusters_dbscan.csv", index=False) # on suavegarde dans un fichier csv
+df.to_csv("csv/export_IA_with_clusters_dbscan.csv", index=False) # on sauvegarde dans un fichier csv
 print("Fichier sauvegardé : export_IA_with_clusters_dbscan.csv")
 
 # Carte
@@ -135,7 +135,7 @@ df_sorted = df.sort_values(by=['MMSI', 'BaseDateTime']) # on trie les données p
  
 # Moyennes SOG, COG, Heading par cluster
 cluster_means = df.groupby('Cluster')[['SOG', 'COG', 'Heading']].mean()
-print(cluster_means) # on affiche le tableau des moyennesichier sauvegardé : export_IA_with_clusters_birch.csv (avec colonnes de cluster)
+print(cluster_means) # on affiche le tableau des moyennes
 
 dbscan_cluster_legend = {
     -1.0: "bruit : navire très rapide cap au nord-nord-ouest",
