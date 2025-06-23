@@ -1,0 +1,1 @@
+<!-- footer commun à toutes les pages -->

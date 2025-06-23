@@ -6,5 +6,6 @@ projetIA_groupe1/besoin_client_3/maps/*.html
 
 *.pkl
 *.keras
+*.joblib
 *.csv
 *.venv

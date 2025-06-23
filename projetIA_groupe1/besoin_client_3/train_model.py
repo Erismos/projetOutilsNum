@@ -21,19 +21,16 @@ Dépendances :
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import folium
 import joblib
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
-from sklearn.svm import LinearSVR
 
 
 
@@ -163,7 +160,6 @@ def train_model(X_train: pd.DataFrame, y_train: pd.DataFrame,
             - 'linear_regression'
             - 'ridge'
             - 'xgboost'
-            - 'svr'
         save_path (str): Chemin pour sauvegarder le modèle entraîné
 
     Returns:
@@ -284,45 +280,6 @@ def evaluate_model(model: object, X_test: pd.DataFrame, y_test: pd.DataFrame,
     save_metrics_to_txt(metrics, f'logs/{model_type}_metrics.txt')
     return metrics
 
-def visualize_results(y_test: pd.DataFrame, y_pred: np.ndarray, mmsi_test: pd.Series,
-                      futur: bool, filename: str, model=None, X_init=None, steps=15) -> None:
-    """
-    Visualise les trajets réels et prédits (en dLAT/dLON transformés) par MMSI.
-
-    Args:
-        y_test (pd.DataFrame): Cibles de test contenant dLAT, dLON
-        y_pred (np.ndarray): Prédictions de dLAT, dLON
-        mmsi_test (pd.Series): Identifiants MMSI
-        futur (bool): Active la projection à plusieurs pas (non implémenté ici)
-        filename (str): Chemin du fichier HTML
-        model (object): Modèle (nécessaire pour prédiction future)
-        X_init (pd.DataFrame): Données initiales pour prédiction future
-        steps (int): Nombre de pas à prédire
-    """
-    print(f"Visualisation en cours... ({filename})")
-
-    # Recalculer les vraies et les prédictions
-    pred_LAT = X_test['LAT'].values + y_pred[:, 0]
-    pred_LON = X_test['LON'].values + y_pred[:, 1]
-
-    true_LAT = X_test['LAT'].values + y_test['dLAT'].values
-    true_LON = X_test['LON'].values + y_test['dLON'].values
-
-    m = folium.Map(location=[true_LAT.mean(), true_LON.mean()], zoom_start=6)
-
-    for i in range(0, len(true_LAT), max(1, len(true_LAT) // 500)):
-        folium.PolyLine(
-            [(X_test['LAT'].iloc[i], X_test['LON'].iloc[i]), (true_LAT[i], true_LON[i])],
-            color='green', weight=2, tooltip='Réel'
-        ).add_to(m)
-        folium.PolyLine(
-            [(X_test['LAT'].iloc[i], X_test['LON'].iloc[i]), (pred_LAT[i], pred_LON[i])],
-            color='blue', weight=2, tooltip='Prédit'
-        ).add_to(m)
-
-    m.save(f"maps/{filename}_map.html")
-    print(f"Carte sauvegardée sous {filename}")
-
 if __name__ == "__main__":
     # 1. Préparation des données
     print("Préparation des données...")
@@ -358,7 +315,3 @@ if __name__ == "__main__":
         # model = joblib.load('models/random_forest_model.pkl')
         # 5. Évaluation du modèle
         metrics = evaluate_model(model, X_test, y_test, model_type)
-        
-        # 6. Visualisation des résultats
-        y_pred = model.predict(X_test)
-        visualize_results(y_test, y_pred, X_meta_test["MMSI"], futur=True, model=model, X_init = X_test, filename = f"{model_type}_predictions")
