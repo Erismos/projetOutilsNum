@@ -100,3 +100,11 @@ models/random_forest_model.pkl
 - La précision diminue avec l'augmentation de l'horizon de prédiction
 - Les manoeuvres brusques peuvent affecter la qualité des prédictions
 - Le modèle suppose une continuité dans le comportement du navire
+
+
+Ligne classique AIS
+id,MMSI,BaseDateTime,LAT,LON,SOG,COG,Heading,VesselName,IMO,CallSign,VesselType,Status,Length,Width,Draft,Cargo,TransceiverClass
+
+
+Besoin absolument de ces infos la normalement (dans l'ordre)
+['MMSI', 'BaseDateTime', 'LAT', 'LON', 'SOG', 'COG', "VesselType", "Heading"]
